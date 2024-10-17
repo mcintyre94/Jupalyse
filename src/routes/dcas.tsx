@@ -3,6 +3,7 @@ import { Address, assertIsAddress, isAddress } from "@solana/web3.js";
 import { Form, LoaderFunctionArgs, redirect, useLoaderData, useParams } from "react-router-dom";
 import { DCAFetchedAccount, DCAStatus, FetchDCAsResponse, FetchMintsResponse, MintData } from "../types";
 import { randomId, useListState } from "@mantine/hooks";
+import { numberDisplay } from "../number-display";
 
 async function getClosedDCAs(address: Address) {
     const response = await fetch(`https://dca-api.jup.ag/user/${address}?status=${DCAStatus.CLOSED}`);
@@ -101,15 +102,16 @@ function CheckboxGroup({ dcas, mints }: CheckboxGroupProps) {
     const { inputMint, outputMint } = dcas[0];
     const inputMintData = mints.find(mint => mint.address === inputMint);
     const outputMintData = mints.find(mint => mint.address === outputMint);
-    const label = `${inputMintData?.symbol ?? `Unknown (${inputMint})`} -> ${outputMintData?.symbol ?? `Unknown (${outputMint})`}`;
+    const groupLabel = `${inputMintData?.symbol ?? `Unknown (${inputMint})`} -> ${outputMintData?.symbol ?? `Unknown (${outputMint})`}`;
 
-    const initialValues = dcas.map(dca => {
+    const initialValues = dcas.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map(dca => {
         const date = new Date(dca.createdAt);
         const friendlyDate = date.toLocaleDateString();
         const friendlyTime = date.toLocaleTimeString();
+        const inputAmount = inputMintData ? `${numberDisplay(dca.inDeposited, inputMintData.decimals)} ${inputMintData.symbol}` : "Unknown Amount";
 
         return {
-            label: `Started ${friendlyDate} ${friendlyTime} ${dca.status === DCAStatus.OPEN ? "(open)" : ""}`,
+            label: `${inputAmount} - Started ${friendlyDate} ${friendlyTime} ${dca.status === DCAStatus.OPEN ? "(open)" : ""}`,
             checked: true,
             key: dca.dcaKey,
         };
@@ -137,7 +139,7 @@ function CheckboxGroup({ dcas, mints }: CheckboxGroupProps) {
             <Checkbox
                 checked={allChecked}
                 indeterminate={indeterminate}
-                label={label}
+                label={groupLabel}
                 onChange={() =>
                     handlers.setState((current) =>
                         current.map((value) => ({ ...value, checked: !allChecked }))
@@ -166,9 +168,10 @@ export default function DCAs() {
 
     return (
         <Form method="post">
-            <Stack>
-                {Object.entries(groupedDCAs).map(([key, dcas]) => <CheckboxGroup key={key} dcas={dcas} mints={mints} />)}
-
+            <Stack align="flex-start" gap='xl'>
+                <Stack gap='sm'>
+                    {Object.entries(groupedDCAs).map(([key, dcas]) => <CheckboxGroup key={key} dcas={dcas} mints={mints} />)}
+                </Stack>
                 <Button type="submit">Submit</Button>
             </Stack>
         </Form>
