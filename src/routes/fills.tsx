@@ -2,7 +2,7 @@ import { LoaderFunctionArgs, useLoaderData } from "react-router-dom";
 import { FetchDCAFillsResponse, MintData, StringifiedNumber } from "../types";
 import { Address } from "@solana/web3.js";
 import { getMintData } from "../mint-data";
-import { ActionIcon, Anchor, Button, CopyButton, Flex, Group, Image, rem, Stack, Table, Text, Title, Tooltip } from "@mantine/core";
+import { ActionIcon, Anchor, Button, CopyButton, Flex, Group, Image, rem, Stack, Switch, Table, Text, Title, Tooltip } from "@mantine/core";
 import { IconCopy, IconCheck, IconArrowsUpDown } from '@tabler/icons-react';
 import { numberDisplay } from "../number-display";
 import BigDecimal from "js-big-decimal";
@@ -133,6 +133,8 @@ export default function Fills() {
         setRateType(rateType === RateType.INPUT_PER_OUTPUT ? RateType.OUTPUT_PER_INPUT : RateType.INPUT_PER_OUTPUT);
     }, [rateType]);
 
+    const [subtractFee, setSubtractFee] = useState(false);
+
     return (
         <Stack gap='md'>
             <Group justify="space-between">
@@ -145,14 +147,30 @@ export default function Fills() {
                     <Table.Tr>
                         <Table.Th>Date</Table.Th>
                         <Table.Th>Swapped</Table.Th>
-                        <Table.Th>For</Table.Th>
                         <Table.Th>
-                            <Flex gap='micro' direction='row' align='center'>
+                            <Group gap='xl'>
+                                <Text fw={700}>For</Text>
+                                <Switch
+                                    checked={subtractFee}
+                                    onChange={() => setSubtractFee(!subtractFee)}
+                                    label='Subtract fee'
+                                    styles={{
+                                        label: {
+                                            fontWeight: 'normal',
+                                        }
+                                    }}
+                                />
+                            </Group>
+                        </Table.Th>
+                        <Table.Th>
+                            {/* <Flex gap='micro' direction='row' align='center'> */}
+                            <Group gap='micro'>
                                 <Text>Rate</Text>
                                 <ActionIcon color="gray" size='sm' onClick={switchRateType} variant="subtle">
                                     <IconArrowsUpDown style={{ width: '70%', height: '70%' }} stroke={1.5} />
                                 </ActionIcon>
-                            </Flex>
+                            </Group>
+                            {/* </Flex> */}
                         </Table.Th>
                         <Table.Th>Transaction</Table.Th>
                     </Table.Tr>
@@ -162,11 +180,13 @@ export default function Fills() {
                         const inputMintData = mints.find(mint => mint.address === fill.inputMint);
                         const outputMintData = mints.find(mint => mint.address === fill.outputMint);
 
+                        const outputAmountWithFee: StringifiedNumber = subtractFee ? (BigInt(fill.outAmount) - BigInt(fill.fee)).toString() as StringifiedNumber : fill.outAmount;
+
                         return (
                             <Table.Tr key={fill.txId}>
                                 <Table.Td><DateCell timestamp={fill.confirmedAt} /></Table.Td>
                                 <Table.Td><TokenAmountCell address={fill.inputMint} amountRaw={fill.inAmount} tokenMintData={inputMintData} /></Table.Td>
-                                <Table.Td><TokenAmountCell address={fill.outputMint} amountRaw={fill.outAmount} tokenMintData={outputMintData} /></Table.Td>
+                                <Table.Td><TokenAmountCell address={fill.outputMint} amountRaw={outputAmountWithFee} tokenMintData={outputMintData} /></Table.Td>
                                 <Table.Td><RateCell inputAmountRaw={fill.inAmount} outputAmountRaw={fill.outAmount} inputMintData={inputMintData} outputMintData={outputMintData} rateType={rateType} /></Table.Td>
                                 <Table.Td><TransactionLinkCell txId={fill.txId} /></Table.Td>
                             </Table.Tr>

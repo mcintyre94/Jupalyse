@@ -45,6 +45,7 @@ export type DCAFillData = {
   outputMint: Address;
   inAmount: StringifiedNumber;
   outAmount: StringifiedNumber;
+  fee: StringifiedNumber;
   txId: Signature;
   dcaKey: Address;
 };
