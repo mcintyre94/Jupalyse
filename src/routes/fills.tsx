@@ -1,12 +1,12 @@
-import { LoaderFunctionArgs, useLoaderData } from "react-router-dom";
-import { FetchDCAFillsResponse, MintData, StringifiedNumber } from "../types";
+import { LoaderFunctionArgs, useFetcher, useLoaderData } from "react-router-dom";
+import { DCAFillData, FetchDCAFillsResponse, MintData, StringifiedNumber } from "../types";
 import { Address } from "@solana/web3.js";
 import { getMintData } from "../mint-data";
 import { ActionIcon, Anchor, Button, CopyButton, Flex, Group, Image, rem, Stack, Switch, Table, Text, Title, Tooltip } from "@mantine/core";
 import { IconCopy, IconCheck, IconArrowsUpDown } from '@tabler/icons-react';
 import { numberDisplay } from "../number-display";
 import BigDecimal from "js-big-decimal";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
     const url = new URL(request.url);
@@ -28,6 +28,50 @@ export async function loader({ request }: LoaderFunctionArgs) {
         dcaFills: allFills,
         mints,
     }
+}
+
+type DownloadButtonProps = {
+    dcaFills: DCAFillData[];
+    mints: MintData[];
+}
+
+function DownloadButton({ dcaFills, mints }: DownloadButtonProps) {
+    const fetcher = useFetcher();
+    const downloadLinkRef = useRef<HTMLAnchorElement>(null);
+
+    const submit = useCallback(() => {
+        fetcher.submit(
+            JSON.stringify({
+                dcaFills,
+                mints,
+            }),
+            {
+                method: 'post',
+                action: '/fills/csv',
+                encType: "application/json"
+            }
+        )
+    }, [dcaFills, mints])
+
+    useEffect(() => {
+        if (fetcher.data && fetcher.state === 'idle') {
+            const { url, filename } = fetcher.data;
+            const link = downloadLinkRef.current;
+            if (link) {
+                link.href = url;
+                link.download = filename;
+                link.click();
+                URL.revokeObjectURL(url);
+            }
+        }
+    }, [fetcher.data, fetcher.state]);
+
+    return (
+        <>
+            <Button onClick={submit}>Download CSV</Button>
+            <a ref={downloadLinkRef} style={{ display: 'none' }}></a>
+        </>
+    )
 }
 
 function DateCell({ timestamp }: { timestamp: number }) {
@@ -139,7 +183,7 @@ export default function Fills() {
         <Stack gap='md'>
             <Group justify="space-between">
                 <Title order={3}>Displaying data for {dcaKeys.length} DCAs ({dcaFills.length} fills)</Title>
-                <Button variant='filled'>Download CSV</Button>
+                <DownloadButton dcaFills={dcaFills} mints={mints} />
             </Group>
 
             <Table horizontalSpacing='xs'>
@@ -163,14 +207,12 @@ export default function Fills() {
                             </Group>
                         </Table.Th>
                         <Table.Th>
-                            {/* <Flex gap='micro' direction='row' align='center'> */}
                             <Group gap='micro'>
                                 <Text>Rate</Text>
-                                <ActionIcon color="gray" size='sm' onClick={switchRateType} variant="subtle">
+                                <ActionIcon color="gray" size='sm' onClick={switchRateType} variant="subtle" aria-label="Switch rate type">
                                     <IconArrowsUpDown style={{ width: '70%', height: '70%' }} stroke={1.5} />
                                 </ActionIcon>
                             </Group>
-                            {/* </Flex> */}
                         </Table.Th>
                         <Table.Th>Transaction</Table.Th>
                     </Table.Tr>

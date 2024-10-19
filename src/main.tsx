@@ -4,6 +4,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Root from "./routes/root";
 import DCAsRoute, { loader as DCAsLoader, action as DCAsAction } from "./routes/dcas";
 import Fills, { loader as FillsLoader } from "./routes/fills";
+import { action as FillsCsvAction } from "./routes/fills-csv";
 import { createTheme, MantineProvider, Text } from "@mantine/core";
 
 import "@mantine/core/styles.css";
@@ -27,6 +28,10 @@ const router = createBrowserRouter([
         path: "/fills",
         element: <Fills />,
         loader: FillsLoader,
+      },
+      {
+        path: "/fills/csv",
+        action: FillsCsvAction,
       }
     ],
   },
