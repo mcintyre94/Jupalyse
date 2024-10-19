@@ -6,7 +6,7 @@ import HomeRoute, { action as HomeAction } from "./routes/home";
 import DCAsRoute, { loader as DCAsLoader, action as DCAsAction } from "./routes/dcas";
 import FillsRoute, { loader as FillsLoader } from "./routes/fills";
 import { action as FillsCsvAction } from "./routes/fills-csv";
-import { createTheme, MantineProvider, Text } from "@mantine/core";
+import { createTheme, MantineProvider } from "@mantine/core";
 
 import "@mantine/core/styles.css";
 

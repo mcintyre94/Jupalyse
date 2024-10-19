@@ -1,7 +1,7 @@
 import { Button, Container, Stack, Text, TextInput, Title } from "@mantine/core";
 import { isAddress } from "@solana/web3.js";
 import { useState } from "react";
-import { Form, redirect, useNavigate, useNavigation } from "react-router-dom";
+import { Form, redirect, useNavigation } from "react-router-dom";
 
 export async function action({ request }: { request: Request }) {
     const formData = await request.formData();

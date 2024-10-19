@@ -1,6 +1,6 @@
 import { Button, Checkbox, Container, Group, Stack, Text, Title } from "@mantine/core";
 import { Address, assertIsAddress, isAddress } from "@solana/web3.js";
-import { Form, Link, LoaderFunctionArgs, redirect, useLoaderData, useNavigate, useNavigation, useParams } from "react-router-dom";
+import { Form, Link, LoaderFunctionArgs, redirect, useLoaderData, useNavigation, useParams } from "react-router-dom";
 import { DCAFetchedAccount, DCAStatus, FetchDCAsResponse, MintData } from "../types";
 import { useListState } from "@mantine/hooks";
 import { numberDisplay } from "../number-display";
