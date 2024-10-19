@@ -1,9 +1,10 @@
-import { Button, Checkbox, Stack, Text } from "@mantine/core";
+import { Button, Checkbox, Container, Stack } from "@mantine/core";
 import { Address, assertIsAddress, isAddress } from "@solana/web3.js";
 import { Form, LoaderFunctionArgs, redirect, useLoaderData, useParams } from "react-router-dom";
-import { DCAFetchedAccount, DCAStatus, FetchDCAsResponse, FetchMintsResponse, MintData } from "../types";
-import { randomId, useListState } from "@mantine/hooks";
+import { DCAFetchedAccount, DCAStatus, FetchDCAsResponse, MintData } from "../types";
+import { useListState } from "@mantine/hooks";
 import { numberDisplay } from "../number-display";
+import { getMintData } from "../mint-data";
 
 async function getClosedDCAs(address: Address) {
     const response = await fetch(`https://dca-api.jup.ag/user/${address}?status=${DCAStatus.CLOSED}`);
@@ -21,39 +22,6 @@ async function getOpenDCAs(address: Address) {
         throw new Error("Error fetching open DCAs from Jupiter");
     }
     return data.data.dcaAccounts;
-}
-
-async function getMintData(addresses: Address[]) {
-    const url = 'https://token-list-api.solana.cloud/v1/mints?chainId=101';
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            addresses,
-        }),
-    });
-
-    const data = await response.json() as FetchMintsResponse;
-
-    const fetchedMints = data.content.map(item => item.address);
-    const missingMints = addresses.filter(address => !fetchedMints.includes(address));
-
-    if (missingMints.length > 0) {
-        // use Jup token list to fetch missing mints
-        // Jup has a low rate limit so use as fallback
-        const jupFallbackData = await Promise.all(missingMints.map(async (address) => {
-            const response = await fetch(`https://tokens.jup.ag/token/${address}`);
-            // Jup returns the same structure
-            const mintData = await response.json() as MintData;
-            return mintData;
-        }));
-
-        return [...data.content, ...jupFallbackData];
-    }
-
-    return data.content;
 }
 
 export async function loader({ params }: LoaderFunctionArgs) {
@@ -80,12 +48,10 @@ export async function loader({ params }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: { request: Request }) {
-    console.log("in action!");
     const formData = await request.formData();
     const dcaKeys = formData.getAll("dca") as Address[];
-    console.log({ dcaKeys });
 
-    const redirectUrl = new URL('/dca-data', window.location.href);
+    const redirectUrl = new URL('/fills', window.location.href);
     for (const dcaKey of dcaKeys) {
         redirectUrl.searchParams.append("dca", dcaKey);
     }
@@ -167,13 +133,15 @@ export default function DCAs() {
     }, {} as Record<string, DCAFetchedAccount[]>);
 
     return (
-        <Form method="post">
-            <Stack align="flex-start" gap='xl'>
-                <Stack gap='sm'>
-                    {Object.entries(groupedDCAs).map(([key, dcas]) => <CheckboxGroup key={key} dcas={dcas} mints={mints} />)}
+        <Container>
+            <Form method="post">
+                <Stack align="flex-start" gap='xl'>
+                    <Stack gap='sm'>
+                        {Object.entries(groupedDCAs).map(([key, dcas]) => <CheckboxGroup key={key} dcas={dcas} mints={mints} />)}
+                    </Stack>
+                    <Button type="submit">Submit</Button>
                 </Stack>
-                <Button type="submit">Submit</Button>
-            </Stack>
-        </Form>
+            </Form>
+        </Container>
     )
 }

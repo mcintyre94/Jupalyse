@@ -10,9 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@mantine/core": "^7.13.2",
+    "@mantine/core": "^7.13.3",
     "@mantine/hooks": "^7.13.3",
     "@solana/web3.js": "^2.0.0-rc.1",
+    "@tabler/icons-react": "^3.19.0",
+    "js-big-decimal": "^2.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.27.0"
