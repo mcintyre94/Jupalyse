@@ -1,16 +1,16 @@
-import { LoaderFunctionArgs, useFetcher, useLoaderData } from "react-router-dom";
+import { Link, LoaderFunctionArgs, useFetcher, useLoaderData, useNavigate } from "react-router-dom";
 import { DCAFillData, FetchDCAFillsResponse, MintData, StringifiedNumber } from "../types";
 import { Address } from "@solana/web3.js";
 import { getMintData } from "../mint-data";
 import { ActionIcon, Anchor, Button, CopyButton, Flex, Group, Image, rem, Stack, Switch, Table, Text, Title, Tooltip } from "@mantine/core";
-import { IconCopy, IconCheck, IconArrowsUpDown } from '@tabler/icons-react';
+import { IconCopy, IconCheck, IconArrowsUpDown, IconArrowLeft } from '@tabler/icons-react';
 import { numberDisplay } from "../number-display";
 import BigDecimal from "js-big-decimal";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
     const url = new URL(request.url);
-    const dcaKeys = [...new Set(url.searchParams.getAll("dca"))];
+    const dcaKeys = [...new Set(url.searchParams.getAll("dca"))] as Address[];
 
     const responses = await Promise.all(dcaKeys.map(async dcaKey => {
         const response = await fetch(`https://dca-api.jup.ag/dca/${dcaKey}/fills`)
@@ -182,8 +182,22 @@ function TransactionLinkCell({ txId }: { txId: string }) {
     return <DottedAnchorLink href={explorerLink}>View</DottedAnchorLink>
 }
 
+type ChangeDisplayedDCAsButtonProps = {
+    userAddress: Address;
+    dcaKeys: Address[];
+}
+
+function ChangeDisplayedDCAsButton({ userAddress, dcaKeys }: ChangeDisplayedDCAsButtonProps) {
+    return (
+        <Button variant="subtle" leftSection={<IconArrowLeft size={14} />} component={Link}
+            to={`/dcas/${userAddress}?${dcaKeys.map(dcaKey => `dca=${dcaKey}`).join('&')}`}
+        >Change displayed DCAs</Button>
+    )
+}
+
 export default function Fills() {
     const { dcaKeys, dcaFills, mints } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
+    const userAddress = dcaFills[0].userKey;
 
     const [rateType, setRateType] = useState<RateType>(RateType.OUTPUT_PER_INPUT);
     const switchRateType = useCallback(() => {
@@ -195,6 +209,7 @@ export default function Fills() {
     return (
         <Stack gap='md'>
             <Group justify="space-between">
+                <ChangeDisplayedDCAsButton userAddress={userAddress} dcaKeys={dcaKeys} />
                 <Title order={3}>Displaying data for {dcaKeys.length} DCAs ({dcaFills.length} fills)</Title>
                 <DownloadButton dcaFills={dcaFills} mints={mints} />
             </Group>

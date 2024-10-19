@@ -24,7 +24,7 @@ async function getOpenDCAs(address: Address) {
     return data.data.dcaAccounts;
 }
 
-export async function loader({ params }: LoaderFunctionArgs) {
+export async function loader({ params, request }: LoaderFunctionArgs) {
     const address = params.address as string;
 
     if (!isAddress(address)) {
@@ -41,8 +41,11 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
     const mints = await getMintData(uniqueMintAddresses);
 
+    const dcaKeys = new Set(new URL(request.url).searchParams.getAll("dca") as Address[]);
+
     return {
         dcas: [...closedDCAs, ...openDCAs],
+        selectedDcaKeys: dcaKeys,
         mints,
     };
 }
@@ -61,10 +64,11 @@ export async function action({ request }: { request: Request }) {
 
 type CheckboxGroupProps = {
     dcas: DCAFetchedAccount[],
+    selectedDcaKeys: Set<Address>
     mints: MintData[],
 }
 
-function CheckboxGroup({ dcas, mints }: CheckboxGroupProps) {
+function CheckboxGroup({ dcas, selectedDcaKeys, mints }: CheckboxGroupProps) {
     const { inputMint, outputMint } = dcas[0];
     const inputMintData = mints.find(mint => mint.address === inputMint);
     const outputMintData = mints.find(mint => mint.address === outputMint);
@@ -78,7 +82,7 @@ function CheckboxGroup({ dcas, mints }: CheckboxGroupProps) {
 
         return {
             label: `${inputAmount} - Started ${friendlyDate} ${friendlyTime} ${dca.status === DCAStatus.OPEN ? "(open)" : ""}`,
-            checked: true,
+            checked: selectedDcaKeys.size === 0 || selectedDcaKeys.has(dca.dcaKey),
             key: dca.dcaKey,
         };
     });
@@ -122,7 +126,7 @@ export default function DCAs() {
     const address = params.address as string;
     assertIsAddress(address);
 
-    const { dcas, mints } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
+    const { dcas, selectedDcaKeys, mints } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
 
     // Group DCAs by input + output mint
     const groupedDCAs = dcas.reduce((acc, dca) => {
@@ -137,7 +141,7 @@ export default function DCAs() {
             <Form method="post">
                 <Stack align="flex-start" gap='xl'>
                     <Stack gap='sm'>
-                        {Object.entries(groupedDCAs).map(([key, dcas]) => <CheckboxGroup key={key} dcas={dcas} mints={mints} />)}
+                        {Object.entries(groupedDCAs).map(([key, dcas]) => <CheckboxGroup key={key} dcas={dcas} selectedDcaKeys={selectedDcaKeys} mints={mints} />)}
                     </Stack>
                     <Button type="submit">Submit</Button>
                 </Stack>
