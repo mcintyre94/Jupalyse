@@ -126,6 +126,19 @@ function TokenAmountCell({ address, amountRaw, tokenMintData }: TokenAmountCellP
         <Flex gap='micro' direction='row' align='center'>
             <Image src={tokenMintData.logoURI} width={16} height={16} />
             <Text>{formattedAmount} <DottedAnchorLink href={explorerLink}>{tokenMintData.symbol}</DottedAnchorLink></Text>
+            <CopyButton value={address} timeout={2000}>
+                {({ copied, copy }) => (
+                    <Tooltip label={copied ? 'Copied' : 'Copy mint address'} withArrow position="right">
+                        <ActionIcon color={copied ? 'teal' : 'gray'} variant="subtle" onClick={copy}>
+                            {copied ? (
+                                <IconCheck style={{ width: rem(16) }} />
+                            ) : (
+                                <IconCopy style={{ width: rem(16) }} />
+                            )}
+                        </ActionIcon>
+                    </Tooltip>
+                )}
+            </CopyButton>
         </Flex>
     )
 }
