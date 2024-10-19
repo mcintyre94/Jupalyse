@@ -2,6 +2,10 @@ import { Address } from "@solana/web3.js";
 import { FetchMintsResponse, MintData } from "./types";
 
 export async function getMintData(addresses: Address[]) {
+  if (addresses.length === 0) {
+    return [];
+  }
+
   const url = "https://token-list-api.solana.cloud/v1/mints?chainId=101";
   const response = await fetch(url, {
     method: "POST",

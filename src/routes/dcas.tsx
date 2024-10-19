@@ -1,4 +1,4 @@
-import { Button, Checkbox, Container, Stack } from "@mantine/core";
+import { Button, Checkbox, Container, Stack, Text } from "@mantine/core";
 import { Address, assertIsAddress, isAddress } from "@solana/web3.js";
 import { Form, LoaderFunctionArgs, redirect, useLoaderData, useParams } from "react-router-dom";
 import { DCAFetchedAccount, DCAStatus, FetchDCAsResponse, MintData } from "../types";
@@ -135,6 +135,11 @@ export default function DCAs() {
         acc[key].push(dca);
         return acc;
     }, {} as Record<string, DCAFetchedAccount[]>);
+
+
+    if (Object.keys(groupedDCAs).length === 0) {
+        return <Text>No Jupiter DCAs found for {address}</Text>
+    }
 
     return (
         <Container>

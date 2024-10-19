@@ -197,7 +197,6 @@ function ChangeDisplayedDCAsButton({ userAddress, dcaKeys }: ChangeDisplayedDCAs
 
 export default function Fills() {
     const { dcaKeys, dcaFills, mints } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
-    const userAddress = dcaFills[0].userKey;
 
     const [rateType, setRateType] = useState<RateType>(RateType.OUTPUT_PER_INPUT);
     const switchRateType = useCallback(() => {
@@ -205,6 +204,17 @@ export default function Fills() {
     }, [rateType]);
 
     const [subtractFee, setSubtractFee] = useState(false);
+
+
+    if (dcaKeys.length === 0) {
+        return <Text>No DCAs selected</Text>
+    }
+
+    if (dcaFills.length === 0) {
+        return <Text>No transactions found for selected DCAs</Text>
+    }
+
+    const userAddress = dcaFills[0].userKey;
 
     return (
         <Stack gap='md'>
