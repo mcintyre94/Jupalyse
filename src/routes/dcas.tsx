@@ -1,10 +1,11 @@
-import { Button, Checkbox, Container, Stack, Text } from "@mantine/core";
+import { Button, Checkbox, Container, Group, Stack, Text, Title } from "@mantine/core";
 import { Address, assertIsAddress, isAddress } from "@solana/web3.js";
-import { Form, LoaderFunctionArgs, redirect, useLoaderData, useParams } from "react-router-dom";
+import { Form, Link, LoaderFunctionArgs, redirect, useLoaderData, useNavigate, useNavigation, useParams } from "react-router-dom";
 import { DCAFetchedAccount, DCAStatus, FetchDCAsResponse, MintData } from "../types";
 import { useListState } from "@mantine/hooks";
 import { numberDisplay } from "../number-display";
 import { getMintData } from "../mint-data";
+import { IconArrowLeft } from "@tabler/icons-react";
 
 async function getClosedDCAs(address: Address) {
     const response = await fetch(`https://dca-api.jup.ag/user/${address}?status=${DCAStatus.CLOSED}`);
@@ -121,12 +122,22 @@ function CheckboxGroup({ dcas, selectedDcaKeys, mints }: CheckboxGroupProps) {
     );
 }
 
+function ChangeAddressButton() {
+    return (
+        <Button variant="subtle" leftSection={<IconArrowLeft size={14} />} component={Link} to={'/'}
+        >Change Address</Button>
+    )
+}
+
 export default function DCAs() {
     const params = useParams();
     const address = params.address as string;
     assertIsAddress(address);
 
     const { dcas, selectedDcaKeys, mints } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
+
+    const navigation = useNavigation();
+    const isLoading = navigation.state === 'loading';
 
     // Group DCAs by input + output mint
     const groupedDCAs = dcas.reduce((acc, dca) => {
@@ -136,21 +147,27 @@ export default function DCAs() {
         return acc;
     }, {} as Record<string, DCAFetchedAccount[]>);
 
-
-    if (Object.keys(groupedDCAs).length === 0) {
-        return <Text>No Jupiter DCAs found for {address}</Text>
-    }
-
     return (
         <Container>
-            <Form method="post">
-                <Stack align="flex-start" gap='xl'>
-                    <Stack gap='sm'>
-                        {Object.entries(groupedDCAs).map(([key, dcas]) => <CheckboxGroup key={key} dcas={dcas} selectedDcaKeys={selectedDcaKeys} mints={mints} />)}
-                    </Stack>
-                    <Button type="submit">Submit</Button>
-                </Stack>
-            </Form>
+            <Stack gap='xl'>
+                <Group gap='xl'>
+                    <ChangeAddressButton />
+                    <Title order={3}>Select DCAs to display</Title>
+                </Group>
+
+                {Object.keys(groupedDCAs).length > 1 ? (
+                    <Form method="post">
+                        <Stack align="flex-start" gap='xl'>
+                            <Stack gap='sm'>
+                                {Object.entries(groupedDCAs).map(([key, dcas]) => <CheckboxGroup key={key} dcas={dcas} selectedDcaKeys={selectedDcaKeys} mints={mints} />)}
+                            </Stack>
+                            <Button type="submit" loading={isLoading}>Submit</Button>
+                        </Stack>
+                    </Form>
+                ) : (
+                    <Text>No Jupiter DCAs found for {address}</Text>
+                )}
+            </Stack>
         </Container>
     )
 }

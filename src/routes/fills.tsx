@@ -1,4 +1,4 @@
-import { Link, LoaderFunctionArgs, useFetcher, useLoaderData, useNavigate } from "react-router-dom";
+import { Link, LoaderFunctionArgs, useFetcher, useLoaderData, useNavigation } from "react-router-dom";
 import { DCAFillData, FetchDCAFillsResponse, MintData, StringifiedNumber } from "../types";
 import { Address } from "@solana/web3.js";
 import { getMintData } from "../mint-data";
@@ -37,6 +37,7 @@ type DownloadButtonProps = {
 
 function DownloadButton({ dcaFills, mints }: DownloadButtonProps) {
     const fetcher = useFetcher();
+    const isLoading = fetcher.state === 'loading';
     const downloadLinkRef = useRef<HTMLAnchorElement>(null);
 
     const submit = useCallback(() => {
@@ -68,7 +69,7 @@ function DownloadButton({ dcaFills, mints }: DownloadButtonProps) {
 
     return (
         <>
-            <Button onClick={submit}>Download CSV</Button>
+            <Button onClick={submit} loading={isLoading}>Download CSV</Button>
             <a ref={downloadLinkRef} style={{ display: 'none' }}></a>
         </>
     )
@@ -188,9 +189,13 @@ type ChangeDisplayedDCAsButtonProps = {
 }
 
 function ChangeDisplayedDCAsButton({ userAddress, dcaKeys }: ChangeDisplayedDCAsButtonProps) {
+    const navigation = useNavigation();
+    const isLoading = navigation.state === 'loading';
+
     return (
         <Button variant="subtle" leftSection={<IconArrowLeft size={14} />} component={Link}
             to={`/dcas/${userAddress}?${dcaKeys.map(dcaKey => `dca=${dcaKey}`).join('&')}`}
+            loading={isLoading}
         >Change displayed DCAs</Button>
     )
 }
@@ -224,7 +229,7 @@ export default function Fills() {
                 <DownloadButton dcaFills={dcaFills} mints={mints} />
             </Group>
 
-            <Table horizontalSpacing='xs'>
+            <Table horizontalSpacing='lg'>
                 <Table.Thead>
                     <Table.Tr>
                         <Table.Th>Date</Table.Th>

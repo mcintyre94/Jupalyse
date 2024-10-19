@@ -2,8 +2,9 @@ import * as React from "react";
 import * as ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Root from "./routes/root";
+import HomeRoute, { action as HomeAction } from "./routes/home";
 import DCAsRoute, { loader as DCAsLoader, action as DCAsAction } from "./routes/dcas";
-import Fills, { loader as FillsLoader } from "./routes/fills";
+import FillsRoute, { loader as FillsLoader } from "./routes/fills";
 import { action as FillsCsvAction } from "./routes/fills-csv";
 import { createTheme, MantineProvider, Text } from "@mantine/core";
 
@@ -16,7 +17,8 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Text c="red">Home</Text>,
+        element: <HomeRoute />,
+        action: HomeAction,
       },
       {
         path: "/dcas/:address",
@@ -26,7 +28,7 @@ const router = createBrowserRouter([
       },
       {
         path: "/fills",
-        element: <Fills />,
+        element: <FillsRoute />,
         loader: FillsLoader,
       },
       {
@@ -40,6 +42,9 @@ const router = createBrowserRouter([
 const theme = createTheme({
   spacing: {
     micro: "calc(0.25rem * var(--mantine-scale))",
+  },
+  fontSizes: {
+    'h1': "calc(2.125rem * var(--mantine-scale))",
   }
 })
 
