@@ -48,7 +48,7 @@ function DownloadButton({ dcaFills, mints }: DownloadButtonProps) {
             }),
             {
                 method: 'post',
-                action: '/fills/csv',
+                action: '/trades/csv',
                 encType: "application/json"
             }
         )
@@ -225,7 +225,7 @@ export default function Fills() {
         <Stack gap='md'>
             <Group justify="space-between">
                 <ChangeDisplayedDCAsButton userAddress={userAddress} dcaKeys={dcaKeys} />
-                <Title order={3}>Displaying data for {dcaKeys.length} DCAs ({dcaFills.length} fills)</Title>
+                <Title order={3}>Displaying data for {dcaKeys.length} DCAs ({dcaFills.length} trades)</Title>
                 <DownloadButton dcaFills={dcaFills} mints={mints} />
             </Group>
 

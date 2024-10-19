@@ -4,8 +4,8 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Root from "./routes/root";
 import HomeRoute, { action as HomeAction } from "./routes/home";
 import DCAsRoute, { loader as DCAsLoader, action as DCAsAction } from "./routes/dcas";
-import FillsRoute, { loader as FillsLoader } from "./routes/fills";
-import { action as FillsCsvAction } from "./routes/fills-csv";
+import TradesRoute, { loader as TradesLoader } from "./routes/trades";
+import { action as TradesCsvAction } from "./routes/trades-csv";
 import { createTheme, MantineProvider } from "@mantine/core";
 
 import "@mantine/core/styles.css";
@@ -27,13 +27,13 @@ const router = createBrowserRouter([
         action: DCAsAction,
       },
       {
-        path: "/fills",
-        element: <FillsRoute />,
-        loader: FillsLoader,
+        path: "/trades",
+        element: <TradesRoute />,
+        loader: TradesLoader,
       },
       {
-        path: "/fills/csv",
-        action: FillsCsvAction,
+        path: "/trades/csv",
+        action: TradesCsvAction,
       }
     ],
   },

@@ -55,7 +55,7 @@ export async function action({ request }: { request: Request }) {
     const formData = await request.formData();
     const dcaKeys = formData.getAll("dca") as Address[];
 
-    const redirectUrl = new URL('/fills', window.location.href);
+    const redirectUrl = new URL('/trades', window.location.href);
     for (const dcaKey of dcaKeys) {
         redirectUrl.searchParams.append("dca", dcaKey);
     }
