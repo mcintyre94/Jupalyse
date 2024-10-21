@@ -79,3 +79,22 @@ export type FetchValueAveragesResponse = {
     valueAverageAccounts: ValueAverageFetchedAccount[];
   };
 };
+
+export type ValueAverageFillData = {
+  userKey: Address;
+  confirmedAt: number; // unix timestamp
+  inputMint: Address;
+  outputMint: Address;
+  inputAmount: StringifiedNumber;
+  outputAmount: StringifiedNumber;
+  fee: StringifiedNumber;
+  txSignature: Signature;
+  valueAverageKey: Address;
+};
+
+export type FetchValueAverageFillsResponse = {
+  ok: boolean;
+  data: {
+    fills: ValueAverageFillData[];
+  };
+};
