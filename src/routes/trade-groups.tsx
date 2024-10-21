@@ -1,4 +1,4 @@
-import { Button, Checkbox, Container, Group, Space, Stack, Text, Title } from "@mantine/core";
+import { Badge, Button, Checkbox, Container, Group, Space, Stack, Text, Title } from "@mantine/core";
 import { Address, assertIsAddress, isAddress } from "@solana/web3.js";
 import { Form, Link, LoaderFunctionArgs, useLoaderData, useNavigation, useParams } from "react-router-dom";
 import { DCAFetchedAccount, DCAStatus, FetchDCAsResponse, FetchValueAveragesResponse, MintData, ValueAverageFetchedAccount, ValueAverageStatus } from "../types";
@@ -75,6 +75,40 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     };
 }
 
+type SingleItemCheckboxGroupProps = {
+    selectedKeys: Set<Address>,
+    mints: MintData[],
+    account: DCAFetchedAccount | ValueAverageFetchedAccount,
+    field: "dca" | "va",
+}
+
+function SingleItemCheckboxGroup({ selectedKeys, mints, account, field }: SingleItemCheckboxGroupProps) {
+    const key = "dcaKey" in account ? account.dcaKey : account.valueAverageKey;
+    const inputMintData = mints.find(mint => mint.address === account.inputMint);
+    const outputMintData = mints.find(mint => mint.address === account.outputMint);
+
+    const inputAmount = inputMintData ? `${numberDisplay(account.inDeposited, inputMintData.decimals)} ${inputMintData.symbol}` : "Unknown Amount";
+    const isOpen = "dcaKey" in account ? account.status === DCAStatus.OPEN : account.status === ValueAverageStatus.OPEN;
+
+    const date = new Date(account.createdAt);
+    const friendlyDate = date.toLocaleDateString();
+    const friendlyTime = date.toLocaleTimeString();
+
+    return (
+        <Checkbox
+            defaultChecked={selectedKeys.size === 0 || selectedKeys.has(key)}
+            label={(
+                <Group>
+                    <Text size='sm'>{inputAmount} {inputMintData?.symbol ?? `Unknown (${account.inputMint})`} {'->'} {outputMintData?.symbol ?? `Unknown (${account.outputMint})`} - Started {friendlyDate} {friendlyTime}</Text>
+                    {isOpen ? <Badge size='xs' variant='outline' c='green.1'>Open</Badge> : null}
+                </Group>
+            )}
+            name={field}
+            value={key}
+        />
+    )
+}
+
 type BaseCheckboxGroupProps = {
     mints: MintData[],
     selectedKeys: Set<Address>,
@@ -89,6 +123,14 @@ type CheckboxGroupProps = BaseCheckboxGroupProps & ({
 })
 
 function CheckboxGroup({ accounts, field, selectedKeys, mints }: CheckboxGroupProps) {
+    if (accounts.length === 0) {
+        return null;
+    }
+
+    if (accounts.length === 1) {
+        return <SingleItemCheckboxGroup selectedKeys={selectedKeys} mints={mints} account={accounts[0]} field={field} />
+    }
+
     const { inputMint, outputMint } = accounts[0];
     const inputMintData = mints.find(mint => mint.address === inputMint);
     const outputMintData = mints.find(mint => mint.address === outputMint);
@@ -104,7 +146,12 @@ function CheckboxGroup({ accounts, field, selectedKeys, mints }: CheckboxGroupPr
         const isOpen = field === "dca" ? account.status === DCAStatus.OPEN : account.status === ValueAverageStatus.OPEN;
 
         return {
-            label: `${inputAmount} - Started ${friendlyDate} ${friendlyTime} ${isOpen ? "(open)" : ""}`,
+            label: (
+                <Group align='center'>
+                    <Text size='sm'>{inputAmount} - Started {friendlyDate} {friendlyTime}</Text>
+                    {isOpen ? <Badge size='xs' variant='outline' c='green.1'>Open</Badge> : null}
+                </Group>
+            ),
             checked: selectedKeys.size === 0 || selectedKeys.has(key),
             key,
         };
@@ -151,7 +198,7 @@ function ChangeAddressButton() {
     )
 }
 
-export default function DCAs() {
+export default function TradeGroups() {
     const params = useParams();
     const address = params.address as string;
     assertIsAddress(address);
