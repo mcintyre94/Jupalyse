@@ -56,3 +56,26 @@ export type FetchDCAFillsResponse = {
     fills: DCAFillData[];
   };
 };
+
+export enum ValueAverageStatus {
+  CLOSED = 0,
+  OPEN = 1,
+}
+
+export type ValueAverageFetchedAccount = {
+  createdAt: StringifiedDate;
+  valueAverageKey: Address;
+  inputMint: Address;
+  outputMint: Address;
+  inDeposited: StringifiedNumber;
+  inLeft: StringifiedNumber;
+  status: ValueAverageStatus;
+  supposedUsdcValue: StringifiedNumber;
+};
+
+export type FetchValueAveragesResponse = {
+  ok: boolean;
+  data: {
+    valueAverageAccounts: ValueAverageFetchedAccount[];
+  };
+};

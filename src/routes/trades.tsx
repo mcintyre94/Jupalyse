@@ -194,7 +194,7 @@ function ChangeDisplayedDCAsButton({ userAddress, dcaKeys }: ChangeDisplayedDCAs
 
     return (
         <Button variant="subtle" leftSection={<IconArrowLeft size={14} />} component={Link}
-            to={`/dcas/${userAddress}?${dcaKeys.map(dcaKey => `dca=${dcaKey}`).join('&')}`}
+            to={`/trade-groups/${userAddress}?${dcaKeys.map(dcaKey => `dca=${dcaKey}`).join('&')}`}
             loading={isLoading}
         >Change displayed DCAs</Button>
     )

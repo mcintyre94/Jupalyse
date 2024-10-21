@@ -11,7 +11,7 @@ export async function action({ request }: { request: Request }) {
         throw new Error('Invalid address');
     }
 
-    return redirect(`/dcas/${address}`);
+    return redirect(`/trade-groups/${address}`);
 }
 
 export default function Home() {

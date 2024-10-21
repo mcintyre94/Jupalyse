@@ -3,7 +3,7 @@ import * as ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Root from "./routes/root";
 import HomeRoute, { action as HomeAction } from "./routes/home";
-import DCAsRoute, { loader as DCAsLoader, action as DCAsAction } from "./routes/dcas";
+import TradeGroupsRoute, { loader as TradeGroupsLoader } from "./routes/trade-groups";
 import TradesRoute, { loader as TradesLoader } from "./routes/trades";
 import { action as TradesCsvAction } from "./routes/trades-csv";
 import { createTheme, MantineProvider } from "@mantine/core";
@@ -21,10 +21,9 @@ const router = createBrowserRouter([
         action: HomeAction,
       },
       {
-        path: "/dcas/:address",
-        element: <DCAsRoute />,
-        loader: DCAsLoader,
-        action: DCAsAction,
+        path: "/trade-groups/:address",
+        element: <TradeGroupsRoute />,
+        loader: TradeGroupsLoader,
       },
       {
         path: "/trades",
@@ -45,7 +44,7 @@ const theme = createTheme({
   },
   fontSizes: {
     'h1': "calc(2.125rem * var(--mantine-scale))",
-  }
+  },
 })
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
