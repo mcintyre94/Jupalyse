@@ -188,7 +188,7 @@ export default function DCAs() {
 
                 <Form action='/trades'>
                     <Stack align="flex-start" gap='xl'>
-                        {Object.keys(groupedDCAs).length > 1 ?
+                        {Object.keys(groupedDCAs).length > 0 ?
                             <Stack gap='sm'>
                                 <Title order={4}>DCAs (Dollar-Cost Averages)</Title>
                                 {Object.entries(groupedDCAs).map(([key, dcas]) => <CheckboxGroup key={key} accounts={dcas} field="dca" selectedKeys={selectedDcaKeys} mints={mints} />)}
@@ -196,7 +196,7 @@ export default function DCAs() {
                             : <Text>No Jupiter DCAs found for {address}</Text>
                         }
 
-                        {Object.keys(groupedValueAverages).length > 1 ?
+                        {Object.keys(groupedValueAverages).length > 0 ?
                             <Stack gap='sm'>
                                 <Title order={4}>VAs (Value Averages)</Title>
                                 {Object.entries(groupedValueAverages).map(([key, vas]) => <CheckboxGroup key={key} accounts={vas} field="va" selectedKeys={selectedValueAverageKeys} mints={mints} />)}
