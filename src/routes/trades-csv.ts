@@ -1,11 +1,11 @@
 import { ActionFunctionArgs } from "react-router-dom";
-import { DCAFillData, MintData } from "../types";
+import { Trade, MintData } from "../types";
 import { Address, Signature, StringifiedNumber } from "@solana/web3.js";
 import { numberDisplay } from "../number-display";
 import BigDecimal from "js-big-decimal";
 
 type InputData = {
-  dcaFills: DCAFillData[];
+  trades: Trade[];
   mints: MintData[];
 };
 
@@ -22,7 +22,8 @@ type CSVDataRow = {
   outAmountFee: StringifiedNumber;
   outAmountNet: StringifiedNumber;
   transactionSignature: Signature;
-  DCAKey: Address;
+  tradeGroupType: "DCA" | "VA";
+  tradeGroupKey: Address;
 };
 
 export function convertToCSV(items: CSVDataRow[]): string {
@@ -43,7 +44,8 @@ export function convertToCSV(items: CSVDataRow[]): string {
     "Out Amount (fee)",
     "Out Amount (net)",
     "Transaction Signature",
-    "DCA Key",
+    "Trade Group Type",
+    "Trade Group Key",
   ];
   const csvRows = [headerNames.join(",")];
 
@@ -69,15 +71,15 @@ export function convertToCSV(items: CSVDataRow[]): string {
 export async function action({ request }: ActionFunctionArgs) {
   const inputData: InputData = await request.json();
 
-  const csvData: CSVDataRow[] = inputData.dcaFills.map((fill) => {
+  const csvData: CSVDataRow[] = inputData.trades.map((trade) => {
     const inputMintData = inputData.mints.find(
-      (mint) => mint.address === fill.inputMint
+      (mint) => mint.address === trade.inputMint
     );
     const outputMintData = inputData.mints.find(
-      (mint) => mint.address === fill.outputMint
+      (mint) => mint.address === trade.outputMint
     );
     const inputAmountFormatted = inputMintData
-      ? numberDisplay(fill.inAmount, inputMintData.decimals)
+      ? numberDisplay(trade.inputAmount, inputMintData.decimals)
       : "";
 
     let outputAmountFormatted = "";
@@ -86,10 +88,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (outputMintData) {
       const outputAmountBigDecimal = new BigDecimal(
-        `${fill.outAmount}E-${outputMintData.decimals}`
+        `${trade.outputAmount}E-${outputMintData.decimals}`
       );
       const outputFeeBigDecimal = new BigDecimal(
-        `${fill.fee}E-${outputMintData.decimals}`
+        `${trade.fee}E-${outputMintData.decimals}`
       );
       const outputAmountNetBigDecimal =
         outputAmountBigDecimal.subtract(outputFeeBigDecimal);
@@ -103,19 +105,20 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     return {
-      timestamp: fill.confirmedAt,
-      inTokenAddress: fill.inputMint,
+      timestamp: Math.floor(new Date(trade.confirmedAt).getTime() / 1000),
+      inTokenAddress: trade.inputMint,
       inTokenName: inputMintData?.name ?? "",
       inTokenSymbol: inputMintData?.symbol ?? "",
       inAmount: inputAmountFormatted as StringifiedNumber,
-      outTokenAddress: fill.outputMint,
+      outTokenAddress: trade.outputMint,
       outTokenName: outputMintData?.name ?? "",
       outTokenSymbol: outputMintData?.symbol ?? "",
       outAmount: outputAmountFormatted as StringifiedNumber,
       outAmountFee: outputAmountFeeFormatted as StringifiedNumber,
       outAmountNet: outputAmountNetFormatted as StringifiedNumber,
-      transactionSignature: fill.txId,
-      DCAKey: fill.dcaKey,
+      transactionSignature: trade.transactionSignature,
+      tradeGroupType: trade.tradeGroupType === "dca" ? "DCA" : "VA",
+      tradeGroupKey: trade.tradeGroupKey,
     };
   });
 
@@ -128,6 +131,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const url = URL.createObjectURL(blob);
 
   // Return the URL and filename
-  const userAddress = inputData.dcaFills[0].userKey;
-  return { url, filename: `${userAddress}-dcas.csv` };
+  const userAddress = inputData.trades[0].userAddress;
+  return { url, filename: `${userAddress}-trades.csv` };
 }

@@ -1,41 +1,86 @@
-import { Link, LoaderFunctionArgs, useFetcher, useLoaderData, useNavigation } from "react-router-dom";
-import { DCAFillData, FetchDCAFillsResponse, MintData, StringifiedNumber } from "../types";
+import { Form, LoaderFunctionArgs, useFetcher, useLoaderData, useNavigation } from "react-router-dom";
+import { FetchDCAFillsResponse, FetchValueAverageFillsResponse, MintData, StringifiedNumber, Trade } from "../types";
 import { Address } from "@solana/web3.js";
 import { getMintData } from "../mint-data";
-import { ActionIcon, Anchor, Button, CopyButton, Flex, Group, Image, rem, Stack, Switch, Table, Text, Title, Tooltip } from "@mantine/core";
+import { ActionIcon, Anchor, Badge, Button, CopyButton, Flex, Group, Image, rem, Stack, Switch, Table, Text, Title, Tooltip } from "@mantine/core";
 import { IconCopy, IconCheck, IconArrowsUpDown, IconArrowLeft } from '@tabler/icons-react';
 import { numberDisplay } from "../number-display";
 import BigDecimal from "js-big-decimal";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export async function loader({ request }: LoaderFunctionArgs) {
-    const url = new URL(request.url);
-    const dcaKeys = [...new Set(url.searchParams.getAll("dca"))] as Address[];
-
+async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
     const responses = await Promise.all(dcaKeys.map(async dcaKey => {
         const response = await fetch(`https://dca-api.jup.ag/dca/${dcaKey}/fills`)
         const fillResponse = await response.json() as FetchDCAFillsResponse
         return fillResponse.data.fills
     }))
+    return responses.flat().map(fill => {
+        return ({
+            confirmedAt: new Date(fill.confirmedAt * 1000),
+            inputMint: fill.inputMint,
+            outputMint: fill.outputMint,
+            inputAmount: fill.inAmount,
+            outputAmount: fill.outAmount,
+            fee: fill.fee,
+            txSignature: fill.txId,
+            tradeGroupType: "dca",
+            tradeGroupKey: fill.dcaKey,
+            userAddress: fill.userKey,
+            transactionSignature: fill.txId,
+        })
+    })
+}
 
-    const allFills = responses.flat().sort((a, b) => a.confirmedAt - b.confirmedAt);
+async function getValueAverageFills(valueAverageKeys: Address[]): Promise<Trade[]> {
+    const responses = await Promise.all(valueAverageKeys.map(async valueAverageKey => {
+        const response = await fetch(`https://va.jup.ag/value-averages/${valueAverageKey}/fills`)
+        const fillResponse = await response.json() as FetchValueAverageFillsResponse
+        return fillResponse.data.fills
+    }))
+    return responses.flat().map(fill => {
+        return ({
+            confirmedAt: new Date(fill.confirmedAt * 1000),
+            inputMint: fill.inputMint,
+            outputMint: fill.outputMint,
+            inputAmount: fill.inputAmount,
+            outputAmount: fill.outputAmount,
+            fee: fill.fee,
+            txSignature: fill.txSignature,
+            tradeGroupType: "value average",
+            tradeGroupKey: fill.valueAverageKey,
+            userAddress: fill.userKey,
+            transactionSignature: fill.txSignature,
+        })
+    })
+}
 
-    const uniqueMintAddresses: Address[] = Array.from(new Set<Address>(allFills.flatMap(fill => [fill.inputMint, fill.outputMint])));
+export async function loader({ request }: LoaderFunctionArgs) {
+    const url = new URL(request.url);
+    const dcaKeys = [...new Set(url.searchParams.getAll("dca"))] as Address[];
+    const valueAverageKeys = [...new Set(url.searchParams.getAll("va"))] as Address[];
+
+    const dcaTrades = dcaKeys.length > 0 ? await getDCAFills(dcaKeys) : [];
+    const valueAverageTrades = valueAverageKeys.length > 0 ? await getValueAverageFills(valueAverageKeys) : [];
+
+    const allTrades = [...dcaTrades, ...valueAverageTrades].sort((a, b) => a.confirmedAt.getTime() - b.confirmedAt.getTime());
+
+    const uniqueMintAddresses: Address[] = Array.from(new Set<Address>(allTrades.flatMap(fill => [fill.inputMint, fill.outputMint])));
     const mints = await getMintData(uniqueMintAddresses);
 
     return {
         dcaKeys,
-        dcaFills: allFills,
+        valueAverageKeys,
+        trades: allTrades,
         mints,
     }
 }
 
 type DownloadButtonProps = {
-    dcaFills: DCAFillData[];
+    trades: Trade[];
     mints: MintData[];
 }
 
-function DownloadButton({ dcaFills, mints }: DownloadButtonProps) {
+function DownloadButton({ trades, mints }: DownloadButtonProps) {
     const fetcher = useFetcher();
     const isLoading = fetcher.state === 'loading';
     const downloadLinkRef = useRef<HTMLAnchorElement>(null);
@@ -43,7 +88,7 @@ function DownloadButton({ dcaFills, mints }: DownloadButtonProps) {
     const submit = useCallback(() => {
         fetcher.submit(
             JSON.stringify({
-                dcaFills,
+                trades,
                 mints,
             }),
             {
@@ -52,7 +97,7 @@ function DownloadButton({ dcaFills, mints }: DownloadButtonProps) {
                 encType: "application/json"
             }
         )
-    }, [dcaFills, mints])
+    }, [trades, mints])
 
     useEffect(() => {
         if (fetcher.data && fetcher.state === 'idle') {
@@ -75,10 +120,10 @@ function DownloadButton({ dcaFills, mints }: DownloadButtonProps) {
     )
 }
 
-function DateCell({ timestamp }: { timestamp: number }) {
-    const date = new Date(timestamp * 1000);
+function DateCell({ date }: { date: Date }) {
     const friendlyDate = date.toLocaleDateString();
     const friendlyTime = date.toLocaleTimeString();
+    const timestamp = Math.floor(date.getTime() / 1000);
     return (
         <Flex gap='micro' direction='row' align='center'>
             <Text>{friendlyDate} {friendlyTime}</Text>
@@ -183,25 +228,41 @@ function TransactionLinkCell({ txId }: { txId: string }) {
     return <DottedAnchorLink href={explorerLink}>View</DottedAnchorLink>
 }
 
-type ChangeDisplayedDCAsButtonProps = {
-    userAddress: Address;
-    dcaKeys: Address[];
+function TransactionTypeCell({ tradeGroupType }: { tradeGroupType: "dca" | "value average" }) {
+    if (tradeGroupType === 'dca') {
+        return <Badge size='xs' variant='light' c='green.1'>DCA</Badge>
+    }
+    return <Badge size='xs' variant='light' c='blue.1'>VA</Badge>
 }
 
-function ChangeDisplayedDCAsButton({ userAddress, dcaKeys }: ChangeDisplayedDCAsButtonProps) {
+type ChangeDisplayedTradesButtonProps = {
+    userAddress: Address;
+    dcaKeys: Address[];
+    valueAverageKeys: Address[];
+}
+
+function ChangeDisplayedTradesButton({ userAddress, dcaKeys, valueAverageKeys }: ChangeDisplayedTradesButtonProps) {
     const navigation = useNavigation();
     const isLoading = navigation.state === 'loading';
 
     return (
-        <Button variant="subtle" leftSection={<IconArrowLeft size={14} />} component={Link}
-            to={`/dcas/${userAddress}?${dcaKeys.map(dcaKey => `dca=${dcaKey}`).join('&')}`}
-            loading={isLoading}
-        >Change displayed DCAs</Button>
+        <Form action={`/trade-groups/${userAddress}`}>
+            {dcaKeys.map(dcaKey => <input key={dcaKey} type="hidden" name="dca" value={dcaKey} />)}
+            {valueAverageKeys.map(vaKey => <input key={vaKey} type="hidden" name="va" value={vaKey} />)}
+
+            <Button
+                type='submit'
+                variant='subtle'
+                leftSection={<IconArrowLeft size={14} />}
+                loading={isLoading}>
+                Change displayed trades
+            </Button>
+        </Form>
     )
 }
 
 export default function Fills() {
-    const { dcaKeys, dcaFills, mints } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
+    const { dcaKeys, valueAverageKeys, trades, mints } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
 
     const [rateType, setRateType] = useState<RateType>(RateType.OUTPUT_PER_INPUT);
     const switchRateType = useCallback(() => {
@@ -211,22 +272,22 @@ export default function Fills() {
     const [subtractFee, setSubtractFee] = useState(false);
 
 
-    if (dcaKeys.length === 0) {
-        return <Text>No DCAs selected</Text>
+    if (dcaKeys.length === 0 && valueAverageKeys.length === 0) {
+        return <Text>No DCAs or VAs selected</Text>
     }
 
-    if (dcaFills.length === 0) {
-        return <Text>No transactions found for selected DCAs</Text>
+    if (trades.length === 0) {
+        return <Text>No trades found for selected DCAs/VAs</Text>
     }
 
-    const userAddress = dcaFills[0].userKey;
+    const userAddress = trades[0].userAddress;
 
     return (
         <Stack gap='md'>
             <Group justify="space-between">
-                <ChangeDisplayedDCAsButton userAddress={userAddress} dcaKeys={dcaKeys} />
-                <Title order={3}>Displaying data for {dcaKeys.length} DCAs ({dcaFills.length} trades)</Title>
-                <DownloadButton dcaFills={dcaFills} mints={mints} />
+                <ChangeDisplayedTradesButton userAddress={userAddress} dcaKeys={dcaKeys} valueAverageKeys={valueAverageKeys} />
+                <Title order={3}>Displaying data for {dcaKeys.length} DCAs and {valueAverageKeys.length} VAs ({trades.length} trades)</Title>
+                <DownloadButton trades={trades} mints={mints} />
             </Group>
 
             <Table horizontalSpacing='lg'>
@@ -258,22 +319,24 @@ export default function Fills() {
                             </Group>
                         </Table.Th>
                         <Table.Th>Transaction</Table.Th>
+                        <Table.Th>Type</Table.Th>
                     </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                    {dcaFills.map((fill) => {
-                        const inputMintData = mints.find(mint => mint.address === fill.inputMint);
-                        const outputMintData = mints.find(mint => mint.address === fill.outputMint);
+                    {trades.map((trade) => {
+                        const inputMintData = mints.find(mint => mint.address === trade.inputMint);
+                        const outputMintData = mints.find(mint => mint.address === trade.outputMint);
 
-                        const outputAmountWithFee: StringifiedNumber = subtractFee ? (BigInt(fill.outAmount) - BigInt(fill.fee)).toString() as StringifiedNumber : fill.outAmount;
+                        const outputAmountWithFee: StringifiedNumber = subtractFee ? (BigInt(trade.outputAmount) - BigInt(trade.fee)).toString() as StringifiedNumber : trade.outputAmount;
 
                         return (
-                            <Table.Tr key={fill.txId}>
-                                <Table.Td><DateCell timestamp={fill.confirmedAt} /></Table.Td>
-                                <Table.Td><TokenAmountCell address={fill.inputMint} amountRaw={fill.inAmount} tokenMintData={inputMintData} /></Table.Td>
-                                <Table.Td><TokenAmountCell address={fill.outputMint} amountRaw={outputAmountWithFee} tokenMintData={outputMintData} /></Table.Td>
-                                <Table.Td><RateCell inputAmountRaw={fill.inAmount} outputAmountRaw={fill.outAmount} inputMintData={inputMintData} outputMintData={outputMintData} rateType={rateType} /></Table.Td>
-                                <Table.Td><TransactionLinkCell txId={fill.txId} /></Table.Td>
+                            <Table.Tr key={trade.transactionSignature}>
+                                <Table.Td><DateCell date={trade.confirmedAt} /></Table.Td>
+                                <Table.Td><TokenAmountCell address={trade.inputMint} amountRaw={trade.inputAmount} tokenMintData={inputMintData} /></Table.Td>
+                                <Table.Td><TokenAmountCell address={trade.outputMint} amountRaw={outputAmountWithFee} tokenMintData={outputMintData} /></Table.Td>
+                                <Table.Td><RateCell inputAmountRaw={trade.inputAmount} outputAmountRaw={trade.outputAmount} inputMintData={inputMintData} outputMintData={outputMintData} rateType={rateType} /></Table.Td>
+                                <Table.Td><TransactionLinkCell txId={trade.transactionSignature} /></Table.Td>
+                                <Table.Td><TransactionTypeCell tradeGroupType={trade.tradeGroupType} /></Table.Td>
                             </Table.Tr>
                         )
                     })}

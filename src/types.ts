@@ -56,3 +56,59 @@ export type FetchDCAFillsResponse = {
     fills: DCAFillData[];
   };
 };
+
+export enum ValueAverageStatus {
+  CLOSED = 0,
+  OPEN = 1,
+}
+
+export type ValueAverageFetchedAccount = {
+  createdAt: StringifiedDate;
+  valueAverageKey: Address;
+  inputMint: Address;
+  outputMint: Address;
+  inDeposited: StringifiedNumber;
+  inLeft: StringifiedNumber;
+  status: ValueAverageStatus;
+  supposedUsdcValue: StringifiedNumber;
+};
+
+export type FetchValueAveragesResponse = {
+  ok: boolean;
+  data: {
+    valueAverageAccounts: ValueAverageFetchedAccount[];
+  };
+};
+
+export type ValueAverageFillData = {
+  userKey: Address;
+  confirmedAt: number; // unix timestamp
+  inputMint: Address;
+  outputMint: Address;
+  inputAmount: StringifiedNumber;
+  outputAmount: StringifiedNumber;
+  fee: StringifiedNumber;
+  txSignature: Signature;
+  valueAverageKey: Address;
+};
+
+export type FetchValueAverageFillsResponse = {
+  ok: boolean;
+  data: {
+    fills: ValueAverageFillData[];
+  };
+};
+
+export type Trade = {
+  confirmedAt: Date;
+  inputMint: Address;
+  outputMint: Address;
+  inputAmount: StringifiedNumber;
+  outputAmount: StringifiedNumber;
+  fee: StringifiedNumber;
+  txSignature: Signature;
+  tradeGroupType: "dca" | "value average";
+  tradeGroupKey: Address;
+  userAddress: Address;
+  transactionSignature: Signature;
+};
