@@ -99,7 +99,7 @@ function SingleItemCheckboxGroup({ selectedKeys, mints, account, field }: Single
             defaultChecked={selectedKeys.size === 0 || selectedKeys.has(key)}
             label={(
                 <Group>
-                    <Text size='sm'>{inputAmount} {inputMintData?.symbol ?? `Unknown (${account.inputMint})`} {'->'} {outputMintData?.symbol ?? `Unknown (${account.outputMint})`} - Started {friendlyDate} {friendlyTime}</Text>
+                    <Text size='sm'>{inputAmount} {'->'} {outputMintData?.symbol ?? `Unknown (${account.outputMint})`} - Started {friendlyDate} {friendlyTime}</Text>
                     {isOpen ? <Badge size='xs' variant='outline' c='green.1'>Open</Badge> : null}
                 </Group>
             )}
