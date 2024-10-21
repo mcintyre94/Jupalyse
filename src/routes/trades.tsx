@@ -1,4 +1,4 @@
-import { Link, LoaderFunctionArgs, useFetcher, useLoaderData, useNavigation } from "react-router-dom";
+import { Form, Link, LoaderFunctionArgs, useFetcher, useLoaderData, useNavigation } from "react-router-dom";
 import { FetchDCAFillsResponse, FetchValueAverageFillsResponse, MintData, StringifiedNumber } from "../types";
 import { Address, Signature } from "@solana/web3.js";
 import { getMintData } from "../mint-data";
@@ -251,20 +251,29 @@ function TransactionTypeCell({ tradeGroupType }: { tradeGroupType: "dca" | "valu
     return <Badge size='xs' variant='light' c='blue.1'>VA</Badge>
 }
 
-type ChangeDisplayedDCAsButtonProps = {
+type ChangeDisplayedTradesButtonProps = {
     userAddress: Address;
     dcaKeys: Address[];
+    valueAverageKeys: Address[];
 }
 
-function ChangeDisplayedDCAsButton({ userAddress, dcaKeys }: ChangeDisplayedDCAsButtonProps) {
+function ChangeDisplayedTradesButton({ userAddress, dcaKeys, valueAverageKeys }: ChangeDisplayedTradesButtonProps) {
     const navigation = useNavigation();
     const isLoading = navigation.state === 'loading';
 
     return (
-        <Button variant="subtle" leftSection={<IconArrowLeft size={14} />} component={Link}
-            to={`/trade-groups/${userAddress}?${dcaKeys.map(dcaKey => `dca=${dcaKey}`).join('&')}`}
-            loading={isLoading}
-        >Change displayed DCAs</Button>
+        <Form action={`/trade-groups/${userAddress}`}>
+            {dcaKeys.map(dcaKey => <input type="hidden" name="dca" value={dcaKey} />)}
+            {valueAverageKeys.map(vaKey => <input type="hidden" name="va" value={vaKey} />)}
+
+            <Button
+                type='submit'
+                variant='subtle'
+                leftSection={<IconArrowLeft size={14} />}
+                loading={isLoading}>
+                Change displayed trades
+            </Button>
+        </Form>
     )
 }
 
@@ -292,7 +301,7 @@ export default function Fills() {
     return (
         <Stack gap='md'>
             <Group justify="space-between">
-                <ChangeDisplayedDCAsButton userAddress={userAddress} dcaKeys={dcaKeys} />
+                <ChangeDisplayedTradesButton userAddress={userAddress} dcaKeys={dcaKeys} valueAverageKeys={valueAverageKeys} />
                 <Title order={3}>Displaying data for {dcaKeys.length} DCAs and {valueAverageKeys.length} VAs ({trades.length} trades)</Title>
                 {/* <DownloadButton dcaFills={dcaFills} mints={mints} /> */}
                 <DownloadButton />

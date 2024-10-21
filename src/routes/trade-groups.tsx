@@ -65,7 +65,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     const mints = await getMintData(uniqueMintAddresses);
 
     const dcaKeys = new Set(new URL(request.url).searchParams.getAll("dca") as Address[]);
-    const valueAverageKeys = new Set(new URL(request.url).searchParams.getAll("value-average") as Address[]);
+    const valueAverageKeys = new Set(new URL(request.url).searchParams.getAll("va") as Address[]);
     return {
         dcas: [...closedDCAs, ...openDCAs],
         valueAverages: [...closedValueAverages, ...openValueAverages],
