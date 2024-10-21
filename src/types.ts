@@ -98,3 +98,17 @@ export type FetchValueAverageFillsResponse = {
     fills: ValueAverageFillData[];
   };
 };
+
+export type Trade = {
+  confirmedAt: Date;
+  inputMint: Address;
+  outputMint: Address;
+  inputAmount: StringifiedNumber;
+  outputAmount: StringifiedNumber;
+  fee: StringifiedNumber;
+  txSignature: Signature;
+  tradeGroupType: "dca" | "value average";
+  tradeGroupKey: Address;
+  userAddress: Address;
+  transactionSignature: Signature;
+};

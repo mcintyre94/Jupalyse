@@ -1,26 +1,12 @@
-import { Form, Link, LoaderFunctionArgs, useFetcher, useLoaderData, useNavigation } from "react-router-dom";
-import { FetchDCAFillsResponse, FetchValueAverageFillsResponse, MintData, StringifiedNumber } from "../types";
-import { Address, Signature } from "@solana/web3.js";
+import { Form, LoaderFunctionArgs, useFetcher, useLoaderData, useNavigation } from "react-router-dom";
+import { FetchDCAFillsResponse, FetchValueAverageFillsResponse, MintData, StringifiedNumber, Trade } from "../types";
+import { Address } from "@solana/web3.js";
 import { getMintData } from "../mint-data";
 import { ActionIcon, Anchor, Badge, Button, CopyButton, Flex, Group, Image, rem, Stack, Switch, Table, Text, Title, Tooltip } from "@mantine/core";
 import { IconCopy, IconCheck, IconArrowsUpDown, IconArrowLeft } from '@tabler/icons-react';
 import { numberDisplay } from "../number-display";
 import BigDecimal from "js-big-decimal";
 import { useCallback, useEffect, useRef, useState } from "react";
-
-type Trade = {
-    confirmedAt: Date;
-    inputMint: Address;
-    outputMint: Address;
-    inputAmount: StringifiedNumber;
-    outputAmount: StringifiedNumber;
-    fee: StringifiedNumber;
-    txSignature: Signature;
-    tradeGroupType: "dca" | "value average";
-    tradeGroupKey: Address;
-    userAddress: Address;
-    transactionSignature: Signature;
-}
 
 async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
     const responses = await Promise.all(dcaKeys.map(async dcaKey => {
@@ -90,30 +76,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 type DownloadButtonProps = {
-    // dcaFills: DCAFillData[];
-    // mints: MintData[];
+    trades: Trade[];
+    mints: MintData[];
 }
 
-function DownloadButton({ }: DownloadButtonProps) {
+function DownloadButton({ trades, mints }: DownloadButtonProps) {
     const fetcher = useFetcher();
     const isLoading = fetcher.state === 'loading';
     const downloadLinkRef = useRef<HTMLAnchorElement>(null);
 
-    // TODO: Implement download for DCAs and VAs
-
-    // const submit = useCallback(() => {
-    //     fetcher.submit(
-    //         JSON.stringify({
-    //             dcaFills,
-    //             mints,
-    //         }),
-    //         {
-    //             method: 'post',
-    //             action: '/trades/csv',
-    //             encType: "application/json"
-    //         }
-    //     )
-    // }, [dcaFills, mints])
+    const submit = useCallback(() => {
+        fetcher.submit(
+            JSON.stringify({
+                trades,
+                mints,
+            }),
+            {
+                method: 'post',
+                action: '/trades/csv',
+                encType: "application/json"
+            }
+        )
+    }, [trades, mints])
 
     useEffect(() => {
         if (fetcher.data && fetcher.state === 'idle') {
@@ -130,7 +114,7 @@ function DownloadButton({ }: DownloadButtonProps) {
 
     return (
         <>
-            <Button /* onClick={submit} */ loading={isLoading}>Download CSV</Button>
+            <Button onClick={submit} loading={isLoading}>Download CSV</Button>
             <a ref={downloadLinkRef} style={{ display: 'none' }}></a>
         </>
     )
@@ -263,8 +247,8 @@ function ChangeDisplayedTradesButton({ userAddress, dcaKeys, valueAverageKeys }:
 
     return (
         <Form action={`/trade-groups/${userAddress}`}>
-            {dcaKeys.map(dcaKey => <input type="hidden" name="dca" value={dcaKey} />)}
-            {valueAverageKeys.map(vaKey => <input type="hidden" name="va" value={vaKey} />)}
+            {dcaKeys.map(dcaKey => <input key={dcaKey} type="hidden" name="dca" value={dcaKey} />)}
+            {valueAverageKeys.map(vaKey => <input key={vaKey} type="hidden" name="va" value={vaKey} />)}
 
             <Button
                 type='submit'
@@ -303,8 +287,7 @@ export default function Fills() {
             <Group justify="space-between">
                 <ChangeDisplayedTradesButton userAddress={userAddress} dcaKeys={dcaKeys} valueAverageKeys={valueAverageKeys} />
                 <Title order={3}>Displaying data for {dcaKeys.length} DCAs and {valueAverageKeys.length} VAs ({trades.length} trades)</Title>
-                {/* <DownloadButton dcaFills={dcaFills} mints={mints} /> */}
-                <DownloadButton />
+                <DownloadButton trades={trades} mints={mints} />
             </Group>
 
             <Table horizontalSpacing='lg'>
