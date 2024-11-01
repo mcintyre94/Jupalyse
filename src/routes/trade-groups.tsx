@@ -190,6 +190,8 @@ export default function TradeGroups() {
         return acc;
     }, {} as Record<string, ValueAverageFetchedAccount[]>);
 
+    const allSelectedKeys = new Set([...selectedDcaKeys, ...selectedValueAverageKeys]);
+
     return (
 
         <Container size='sm'>
@@ -206,7 +208,7 @@ export default function TradeGroups() {
                         {Object.keys(groupedDCAs).length > 0 ?
                             <Stack gap='sm'>
                                 <Title order={4}>DCAs (Dollar-Cost Averages)</Title>
-                                {Object.entries(groupedDCAs).map(([key, dcas]) => <CheckboxGroup key={key} accounts={dcas} field="dca" selectedKeys={selectedDcaKeys} mints={mints} />)}
+                                {Object.entries(groupedDCAs).map(([key, dcas]) => <CheckboxGroup key={key} accounts={dcas} field="dca" selectedKeys={allSelectedKeys} mints={mints} />)}
                             </Stack>
                             : <Text>No Jupiter DCAs found for {address}</Text>
                         }
@@ -214,7 +216,7 @@ export default function TradeGroups() {
                         {Object.keys(groupedValueAverages).length > 0 ?
                             <Stack gap='sm'>
                                 <Title order={4}>VAs (Value Averages)</Title>
-                                {Object.entries(groupedValueAverages).map(([key, vas]) => <CheckboxGroup key={key} accounts={vas} field="va" selectedKeys={selectedValueAverageKeys} mints={mints} />)}
+                                {Object.entries(groupedValueAverages).map(([key, vas]) => <CheckboxGroup key={key} accounts={vas} field="va" selectedKeys={allSelectedKeys} mints={mints} />)}
                             </Stack>
                             : <Text>No Jupiter VAs found for {address}</Text>
                         }
