@@ -123,11 +123,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 type DownloadButtonProps = {
-    trades: Trade[];
+    events: (Trade | Deposit)[];
     mints: MintData[];
+    userAddress: Address;
 }
 
-function DownloadButton({ trades, mints }: DownloadButtonProps) {
+function DownloadButton({ events, mints, userAddress }: DownloadButtonProps) {
     const fetcher = useFetcher();
     const isLoading = fetcher.state === 'loading';
     const downloadLinkRef = useRef<HTMLAnchorElement>(null);
@@ -135,8 +136,9 @@ function DownloadButton({ trades, mints }: DownloadButtonProps) {
     const submit = useCallback(() => {
         fetcher.submit(
             JSON.stringify({
-                trades,
+                events,
                 mints,
+                userAddress,
             }),
             {
                 method: 'post',
@@ -144,12 +146,13 @@ function DownloadButton({ trades, mints }: DownloadButtonProps) {
                 encType: "application/json"
             }
         )
-    }, [trades, mints])
+    }, [events, mints, userAddress])
 
     useEffect(() => {
         if (fetcher.data && fetcher.state === 'idle') {
             const { url, filename } = fetcher.data;
             const link = downloadLinkRef.current;
+            console.log({ url, filename });
             if (link) {
                 link.href = url;
                 link.download = filename;
@@ -386,7 +389,7 @@ export default function Fills() {
             <Group justify="space-between">
                 <ChangeDisplayedTradesButton userAddress={userAddress} dcaKeys={dcaKeys} valueAverageKeys={valueAverageKeys} />
                 <Title order={3}>Displaying data for {dcaKeys.length} DCAs and {valueAverageKeys.length} VAs ({trades.length} trades)</Title>
-                <DownloadButton trades={trades} mints={mints} />
+                <DownloadButton events={events} mints={mints} userAddress={userAddress} />
             </Group>
 
             <Table horizontalSpacing='lg'>
