@@ -7,7 +7,6 @@ import BigDecimal from "js-big-decimal";
 type InputData = {
   events: (Deposit | Trade)[];
   mints: MintData[];
-  userAddress: Address;
 };
 
 type CSVTradeDataRow = {
@@ -189,14 +188,5 @@ export async function action({ request }: ActionFunctionArgs) {
   );
 
   const csvContent = convertToCSV(csvData);
-
-  // Create a Blob with the CSV content
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-
-  // Create a temporary URL for the Blob
-  const url = URL.createObjectURL(blob);
-
-  // Return the URL and filename
-  const userAddress = inputData.userAddress;
-  return { url, filename: `${userAddress}-trades.csv` };
+  return new Response(csvContent);
 }

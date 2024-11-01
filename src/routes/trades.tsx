@@ -138,7 +138,6 @@ function DownloadButton({ events, mints, userAddress }: DownloadButtonProps) {
             JSON.stringify({
                 events,
                 mints,
-                userAddress,
             }),
             {
                 method: 'post',
@@ -146,18 +145,24 @@ function DownloadButton({ events, mints, userAddress }: DownloadButtonProps) {
                 encType: "application/json"
             }
         )
-    }, [events, mints, userAddress])
+    }, [events, mints])
 
     useEffect(() => {
         if (fetcher.data && fetcher.state === 'idle') {
-            const { url, filename } = fetcher.data;
+            const csvContent = fetcher.data as string;
+
+            // Create a Blob with the CSV content
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
+            // Create a temporary URL for the Blob
+            const downloadUrl = URL.createObjectURL(blob);
+
             const link = downloadLinkRef.current;
-            console.log({ url, filename });
             if (link) {
-                link.href = url;
-                link.download = filename;
+                link.href = downloadUrl;
+                link.download = `${userAddress}-trades.csv`;
                 link.click();
-                URL.revokeObjectURL(url);
+                URL.revokeObjectURL(downloadUrl);
             }
         }
     }, [fetcher.data, fetcher.state]);
@@ -429,9 +434,9 @@ export default function Fills() {
                     {events.map((event) => {
 
                         if (event.kind === "trade") {
-                            return <TradeRow trade={event} mints={mints} subtractFee={subtractFee} rateType={rateType} />
+                            return <TradeRow key={event.transactionSignature} trade={event} mints={mints} subtractFee={subtractFee} rateType={rateType} />
                         } else {
-                            return <DepositRow deposit={event} mints={mints} />
+                            return <DepositRow key={event.transactionSignature} deposit={event} mints={mints} />
                         }
                     })}
                 </Table.Tbody>
