@@ -1,47 +1,12 @@
 import { Badge, Button, Checkbox, Container, Group, Space, Stack, Text, Title } from "@mantine/core";
 import { Address, assertIsAddress, isAddress } from "@solana/web3.js";
 import { Form, Link, LoaderFunctionArgs, useLoaderData, useNavigation, useParams } from "react-router-dom";
-import { DCAFetchedAccount, DCAStatus, FetchDCAsResponse, FetchValueAveragesResponse, MintData, ValueAverageFetchedAccount, ValueAverageStatus } from "../types";
+import { DCAFetchedAccount, DCAStatus, MintData, ValueAverageFetchedAccount, ValueAverageStatus } from "../types";
 import { useListState } from "@mantine/hooks";
 import { numberDisplay } from "../number-display";
 import { getMintData } from "../mint-data";
 import { IconArrowLeft } from "@tabler/icons-react";
-
-async function getClosedDCAs(address: Address) {
-    const response = await fetch(`https://dca-api.jup.ag/user/${address}?status=${DCAStatus.CLOSED}`);
-    const data = await response.json() as FetchDCAsResponse
-    if (!data.ok) {
-        throw new Error("Error fetching closed DCAs from Jupiter");
-    }
-    return data.data.dcaAccounts;
-}
-
-async function getOpenDCAs(address: Address) {
-    const response = await fetch(`https://dca-api.jup.ag/user/${address}?status=${DCAStatus.OPEN}`);
-    const data = await response.json() as FetchDCAsResponse
-    if (!data.ok) {
-        throw new Error("Error fetching open DCAs from Jupiter");
-    }
-    return data.data.dcaAccounts;
-}
-
-async function getClosedValueAverages(address: Address) {
-    const response = await fetch(`https://va.jup.ag/value-averages?user=${address}&status=${ValueAverageStatus.CLOSED}`);
-    const data = await response.json() as FetchValueAveragesResponse
-    if (!data.ok) {
-        throw new Error("Error fetching closed value averages from Jupiter");
-    }
-    return data.data.valueAverageAccounts;
-}
-
-async function getOpenValueAverages(address: Address) {
-    const response = await fetch(`https://va.jup.ag/value-averages?user=${address}&status=${ValueAverageStatus.OPEN}`);
-    const data = await response.json() as FetchValueAveragesResponse
-    if (!data.ok) {
-        throw new Error("Error fetching open value averages from Jupiter");
-    }
-    return data.data.valueAverageAccounts;
-}
+import { getClosedDCAs, getOpenDCAs, getClosedValueAverages, getOpenValueAverages } from "../jupiter-api";
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
     const address = params.address as string;
@@ -50,10 +15,12 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
         throw new Error("Invalid address");
     }
 
-    const closedDCAs = await getClosedDCAs(address);
-    const openDCAs = await getOpenDCAs(address);
-    const closedValueAverages = await getClosedValueAverages(address);
-    const openValueAverages = await getOpenValueAverages(address);
+    const [closedDCAs, openDCAs, closedValueAverages, openValueAverages] = await Promise.all([
+        getClosedDCAs(address),
+        getOpenDCAs(address),
+        getClosedValueAverages(address),
+        getOpenValueAverages(address),
+    ]);
 
     const uniqueMintAddresses: Address[] = Array.from(new Set<Address>([
         ...closedDCAs.flatMap(dca => [dca.inputMint, dca.outputMint]),
@@ -235,6 +202,7 @@ export default function TradeGroups() {
 
                 <Form action='/trades'>
                     <Stack align="flex-start" gap='xl'>
+                        <input type='hidden' name='userAddress' value={address} />
                         {Object.keys(groupedDCAs).length > 0 ?
                             <Stack gap='sm'>
                                 <Title order={4}>DCAs (Dollar-Cost Averages)</Title>
