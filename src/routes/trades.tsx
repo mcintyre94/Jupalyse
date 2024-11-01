@@ -1,5 +1,5 @@
 import { Form, LoaderFunctionArgs, useFetcher, useLoaderData, useNavigation } from "react-router-dom";
-import { FetchDCAFillsResponse, FetchValueAverageFillsResponse, MintData, StringifiedNumber, Trade } from "../types";
+import { Deposit, FetchDCAFillsResponse, FetchValueAverageFillsResponse, MintData, StringifiedNumber, Trade } from "../types";
 import { Address } from "@solana/web3.js";
 import { getMintData } from "../mint-data";
 import { ActionIcon, Anchor, Badge, Button, CopyButton, Flex, Group, Image, rem, Stack, Switch, Table, Text, Title, Tooltip } from "@mantine/core";
@@ -7,6 +7,8 @@ import { IconCopy, IconCheck, IconArrowsUpDown, IconArrowLeft } from '@tabler/ic
 import { numberDisplay } from "../number-display";
 import BigDecimal from "js-big-decimal";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getClosedValueAverages, getOpenDCAs, getOpenValueAverages } from "../jupiter-api";
+import { getClosedDCAs } from "../jupiter-api";
 
 async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
     const responses = await Promise.all(dcaKeys.map(async dcaKey => {
@@ -16,7 +18,8 @@ async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
     }))
     return responses.flat().map(fill => {
         return ({
-            confirmedAt: new Date(fill.confirmedAt * 1000),
+            kind: "trade",
+            date: new Date(fill.confirmedAt * 1000),
             inputMint: fill.inputMint,
             outputMint: fill.outputMint,
             inputAmount: fill.inAmount,
@@ -39,7 +42,8 @@ async function getValueAverageFills(valueAverageKeys: Address[]): Promise<Trade[
     }))
     return responses.flat().map(fill => {
         return ({
-            confirmedAt: new Date(fill.confirmedAt * 1000),
+            kind: "trade",
+            date: new Date(fill.confirmedAt * 1000),
             inputMint: fill.inputMint,
             outputMint: fill.outputMint,
             inputAmount: fill.inputAmount,
@@ -54,23 +58,66 @@ async function getValueAverageFills(valueAverageKeys: Address[]): Promise<Trade[
     })
 }
 
+async function getDeposits(userAddress: Address, dcaKeys: Set<Address>, valueAverageKeys: Set<Address>): Promise<Deposit[]> {
+    const [closedDCAs, openDCAs, closedValueAverages, openValueAverages] = await Promise.all([
+        dcaKeys.size > 0 ? getClosedDCAs(userAddress) : [],
+        dcaKeys.size > 0 ? getOpenDCAs(userAddress) : [],
+        valueAverageKeys.size > 0 ? getClosedValueAverages(userAddress) : [],
+        valueAverageKeys.size > 0 ? getOpenValueAverages(userAddress) : [],
+    ]);
+
+    const dcas = [...closedDCAs, ...openDCAs].filter(dca => dcaKeys.has(dca.dcaKey));
+    const valueAverages = [...closedValueAverages, ...openValueAverages].filter(va => valueAverageKeys.has(va.valueAverageKey));
+
+    const dcaDeposits: Deposit[] = dcas.map(dca => ({
+        kind: "deposit",
+        date: new Date(dca.createdAt),
+        inputMint: dca.inputMint,
+        inputAmount: dca.inDeposited,
+        tradeGroupType: "dca",
+        tradeGroupKey: dca.dcaKey,
+        userAddress: userAddress,
+        transactionSignature: dca.openTxHash,
+    }));
+
+    const valueAverageDeposits: Deposit[] = valueAverages.map(va => ({
+        kind: "deposit",
+        date: new Date(va.createdAt),
+        inputMint: va.inputMint,
+        inputAmount: va.inDeposited,
+        tradeGroupType: "value average",
+        tradeGroupKey: va.valueAverageKey,
+        userAddress: userAddress,
+        transactionSignature: va.openTxHash,
+    }));
+
+    return [...dcaDeposits, ...valueAverageDeposits];
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
     const url = new URL(request.url);
+    const userAddress = url.searchParams.get("userAddress") as Address;
     const dcaKeys = [...new Set(url.searchParams.getAll("dca"))] as Address[];
     const valueAverageKeys = [...new Set(url.searchParams.getAll("va"))] as Address[];
 
-    const dcaTrades = dcaKeys.length > 0 ? await getDCAFills(dcaKeys) : [];
-    const valueAverageTrades = valueAverageKeys.length > 0 ? await getValueAverageFills(valueAverageKeys) : [];
+    const [dcaTrades, valueAverageTrades, deposits] = await Promise.all([
+        dcaKeys.length > 0 ? getDCAFills(dcaKeys) : [],
+        valueAverageKeys.length > 0 ? getValueAverageFills(valueAverageKeys) : [],
+        dcaKeys.length > 0 || valueAverageKeys.length > 0 ? getDeposits(userAddress, new Set(dcaKeys), new Set(valueAverageKeys)) : [],
+    ])
 
-    const allTrades = [...dcaTrades, ...valueAverageTrades].sort((a, b) => a.confirmedAt.getTime() - b.confirmedAt.getTime());
+    const allTrades = [...dcaTrades, ...valueAverageTrades] //.sort((a, b) => a.confirmedAt.getTime() - b.confirmedAt.getTime());
 
     const uniqueMintAddresses: Address[] = Array.from(new Set<Address>(allTrades.flatMap(fill => [fill.inputMint, fill.outputMint])));
     const mints = await getMintData(uniqueMintAddresses);
 
+    const events = [...deposits, ...allTrades].sort((a, b) => a.date.getTime() - b.date.getTime());
+
     return {
         dcaKeys,
         valueAverageKeys,
-        trades: allTrades,
+        userAddress,
+        events,
         mints,
     }
 }
@@ -157,9 +204,10 @@ type TokenAmountCellProps = {
     address: Address;
     amountRaw: StringifiedNumber;
     tokenMintData: MintData | undefined;
+    isDeposit: boolean;
 }
 
-function TokenAmountCell({ address, amountRaw, tokenMintData }: TokenAmountCellProps) {
+function TokenAmountCell({ address, amountRaw, tokenMintData, isDeposit }: TokenAmountCellProps) {
     const explorerLink = `https://explorer.solana.com/address/${address}`;
 
     if (!tokenMintData) {
@@ -170,6 +218,7 @@ function TokenAmountCell({ address, amountRaw, tokenMintData }: TokenAmountCellP
 
     return (
         <Flex gap='micro' direction='row' align='center'>
+            {isDeposit && <Text>Deposited</Text>}
             <Image src={tokenMintData.logoURI} width={16} height={16} />
             <Text>{formattedAmount} <DottedAnchorLink href={explorerLink}>{tokenMintData.symbol}</DottedAnchorLink></Text>
             <CopyButton value={address} timeout={2000}>
@@ -228,7 +277,14 @@ function TransactionLinkCell({ txId }: { txId: string }) {
     return <DottedAnchorLink href={explorerLink}>View</DottedAnchorLink>
 }
 
-function TransactionTypeCell({ tradeGroupType }: { tradeGroupType: "dca" | "value average" }) {
+function TransactionKindCell({ kind }: { kind: "deposit" | "trade" }) {
+    if (kind === 'deposit') {
+        return <Badge size='xs' variant='default' c='green.1'>Deposit</Badge>
+    }
+    return <Badge size='xs' variant='default' c='blue.1'>Trade</Badge>
+}
+
+function TransactionProductCell({ tradeGroupType }: { tradeGroupType: "dca" | "value average" }) {
     if (tradeGroupType === 'dca') {
         return <Badge size='xs' variant='light' c='green.1'>DCA</Badge>
     }
@@ -261,8 +317,53 @@ function ChangeDisplayedTradesButton({ userAddress, dcaKeys, valueAverageKeys }:
     )
 }
 
+type TradeRowProps = {
+    trade: Trade;
+    mints: MintData[];
+    subtractFee: boolean;
+    rateType: RateType;
+}
+
+function TradeRow({ trade, mints, subtractFee, rateType }: TradeRowProps) {
+    const inputMintData = mints.find(mint => mint.address === trade.inputMint);
+    const outputMintData = mints.find(mint => mint.address === trade.outputMint);
+
+    const outputAmountWithFee: StringifiedNumber = subtractFee ? (BigInt(trade.outputAmount) - BigInt(trade.fee)).toString() as StringifiedNumber : trade.outputAmount;
+
+    return (
+        <Table.Tr key={trade.transactionSignature}>
+            <Table.Td><TransactionKindCell kind="trade" /></Table.Td>
+            <Table.Td><DateCell date={trade.date} /></Table.Td>
+            <Table.Td><TokenAmountCell address={trade.inputMint} amountRaw={trade.inputAmount} tokenMintData={inputMintData} isDeposit={false} /></Table.Td>
+            <Table.Td><TokenAmountCell address={trade.outputMint} amountRaw={outputAmountWithFee} tokenMintData={outputMintData} isDeposit={false} /></Table.Td>
+            <Table.Td><RateCell inputAmountRaw={trade.inputAmount} outputAmountRaw={trade.outputAmount} inputMintData={inputMintData} outputMintData={outputMintData} rateType={rateType} /></Table.Td>
+            <Table.Td><TransactionLinkCell txId={trade.transactionSignature} /></Table.Td>
+            <Table.Td><TransactionProductCell tradeGroupType={trade.tradeGroupType} /></Table.Td>
+        </Table.Tr>
+    )
+}
+
+type DepositRowProps = {
+    deposit: Deposit;
+    mints: MintData[];
+}
+
+function DepositRow({ deposit, mints }: DepositRowProps) {
+    const inputMintData = mints.find(mint => mint.address === deposit.inputMint);
+
+    return (
+        <Table.Tr key={deposit.transactionSignature}>
+            <Table.Td><TransactionKindCell kind="deposit" /></Table.Td>
+            <Table.Td><DateCell date={deposit.date} /></Table.Td>
+            <Table.Td colSpan={3}><TokenAmountCell address={deposit.inputMint} amountRaw={deposit.inputAmount} tokenMintData={inputMintData} isDeposit={true} /></Table.Td>
+            <Table.Td><TransactionLinkCell txId={deposit.transactionSignature} /></Table.Td>
+            <Table.Td><TransactionProductCell tradeGroupType={deposit.tradeGroupType} /></Table.Td>
+        </Table.Tr>
+    )
+}
+
 export default function Fills() {
-    const { dcaKeys, valueAverageKeys, trades, mints } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
+    const { dcaKeys, valueAverageKeys, userAddress, events, mints } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
 
     const [rateType, setRateType] = useState<RateType>(RateType.OUTPUT_PER_INPUT);
     const switchRateType = useCallback(() => {
@@ -276,11 +377,9 @@ export default function Fills() {
         return <Text>No DCAs or VAs selected</Text>
     }
 
-    if (trades.length === 0) {
-        return <Text>No trades found for selected DCAs/VAs</Text>
-    }
+    const trades = events.filter(event => event.kind === "trade") as Trade[];
 
-    const userAddress = trades[0].userAddress;
+    console.log({ events });
 
     return (
         <Stack gap='md'>
@@ -293,6 +392,7 @@ export default function Fills() {
             <Table horizontalSpacing='lg'>
                 <Table.Thead>
                     <Table.Tr>
+                        <Table.Th>Kind</Table.Th>
                         <Table.Th>Date</Table.Th>
                         <Table.Th>Swapped</Table.Th>
                         <Table.Th>
@@ -319,26 +419,17 @@ export default function Fills() {
                             </Group>
                         </Table.Th>
                         <Table.Th>Transaction</Table.Th>
-                        <Table.Th>Type</Table.Th>
+                        <Table.Th>Product</Table.Th>
                     </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                    {trades.map((trade) => {
-                        const inputMintData = mints.find(mint => mint.address === trade.inputMint);
-                        const outputMintData = mints.find(mint => mint.address === trade.outputMint);
+                    {events.map((event) => {
 
-                        const outputAmountWithFee: StringifiedNumber = subtractFee ? (BigInt(trade.outputAmount) - BigInt(trade.fee)).toString() as StringifiedNumber : trade.outputAmount;
-
-                        return (
-                            <Table.Tr key={trade.transactionSignature}>
-                                <Table.Td><DateCell date={trade.confirmedAt} /></Table.Td>
-                                <Table.Td><TokenAmountCell address={trade.inputMint} amountRaw={trade.inputAmount} tokenMintData={inputMintData} /></Table.Td>
-                                <Table.Td><TokenAmountCell address={trade.outputMint} amountRaw={outputAmountWithFee} tokenMintData={outputMintData} /></Table.Td>
-                                <Table.Td><RateCell inputAmountRaw={trade.inputAmount} outputAmountRaw={trade.outputAmount} inputMintData={inputMintData} outputMintData={outputMintData} rateType={rateType} /></Table.Td>
-                                <Table.Td><TransactionLinkCell txId={trade.transactionSignature} /></Table.Td>
-                                <Table.Td><TransactionTypeCell tradeGroupType={trade.tradeGroupType} /></Table.Td>
-                            </Table.Tr>
-                        )
+                        if (event.kind === "trade") {
+                            return <TradeRow trade={event} mints={mints} subtractFee={subtractFee} rateType={rateType} />
+                        } else {
+                            return <DepositRow deposit={event} mints={mints} />
+                        }
                     })}
                 </Table.Tbody>
             </Table>

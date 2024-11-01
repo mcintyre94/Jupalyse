@@ -105,7 +105,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     return {
-      timestamp: Math.floor(new Date(trade.confirmedAt).getTime() / 1000),
+      timestamp: Math.floor(new Date(trade.date).getTime() / 1000),
       inTokenAddress: trade.inputMint,
       inTokenName: inputMintData?.name ?? "",
       inTokenSymbol: inputMintData?.symbol ?? "",

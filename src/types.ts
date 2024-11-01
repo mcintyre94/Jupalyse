@@ -17,6 +17,7 @@ export type DCAFetchedAccount = {
   inDeposited: StringifiedNumber;
   inAmountPerCycle: StringifiedNumber;
   status: DCAStatus;
+  openTxHash: Signature;
 };
 
 export type FetchDCAsResponse = {
@@ -71,6 +72,7 @@ export type ValueAverageFetchedAccount = {
   inLeft: StringifiedNumber;
   status: ValueAverageStatus;
   supposedUsdcValue: StringifiedNumber;
+  openTxHash: Signature;
 };
 
 export type FetchValueAveragesResponse = {
@@ -99,14 +101,25 @@ export type FetchValueAverageFillsResponse = {
   };
 };
 
+export type Deposit = {
+  kind: "deposit";
+  date: Date;
+  inputMint: Address;
+  inputAmount: StringifiedNumber;
+  tradeGroupType: "dca" | "value average";
+  tradeGroupKey: Address;
+  userAddress: Address;
+  transactionSignature: Signature;
+};
+
 export type Trade = {
-  confirmedAt: Date;
+  kind: "trade";
+  date: Date;
   inputMint: Address;
   outputMint: Address;
   inputAmount: StringifiedNumber;
   outputAmount: StringifiedNumber;
   fee: StringifiedNumber;
-  txSignature: Signature;
   tradeGroupType: "dca" | "value average";
   tradeGroupKey: Address;
   userAddress: Address;
