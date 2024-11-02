@@ -482,9 +482,18 @@ type TradeRowProps = {
   mints: MintData[];
   subtractFee: boolean;
   rateType: RateType;
+  switchSubtractFee: () => void;
+  switchRateType: () => void;
 };
 
-function TradeRow({ trade, mints, subtractFee, rateType }: TradeRowProps) {
+function TradeRow({
+  trade,
+  mints,
+  subtractFee,
+  rateType,
+  switchSubtractFee,
+  switchRateType,
+}: TradeRowProps) {
   const inputMintData = mints.find((mint) => mint.address === trade.inputMint);
   const outputMintData = mints.find(
     (mint) => mint.address === trade.outputMint,
@@ -512,7 +521,7 @@ function TradeRow({ trade, mints, subtractFee, rateType }: TradeRowProps) {
           isDeposit={false}
         />
       </Table.Td>
-      <Table.Td>
+      <Table.Td onClick={switchSubtractFee}>
         <TokenAmountCell
           address={trade.outputMint}
           amountRaw={outputAmountWithFee}
@@ -520,7 +529,7 @@ function TradeRow({ trade, mints, subtractFee, rateType }: TradeRowProps) {
           isDeposit={false}
         />
       </Table.Td>
-      <Table.Td>
+      <Table.Td onClick={switchRateType}>
         <RateCell
           inputAmountRaw={trade.inputAmount}
           outputAmountRaw={trade.outputAmount}
@@ -669,6 +678,8 @@ export default function Fills() {
                   mints={mints}
                   subtractFee={subtractFee}
                   rateType={rateType}
+                  switchSubtractFee={() => setSubtractFee(!subtractFee)}
+                  switchRateType={switchRateType}
                 />
               );
             } else {
