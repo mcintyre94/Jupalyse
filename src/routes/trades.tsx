@@ -340,7 +340,7 @@ function TradeRow({ trade, mints, subtractFee, rateType }: TradeRowProps) {
 
     return (
         <Table.Tr key={trade.transactionSignature}>
-            <Table.Td><TransactionKindCell kind="trade" /></Table.Td>
+            <Table.Td miw={100}><TransactionKindCell kind="trade" /></Table.Td>
             <Table.Td><DateCell date={trade.date} /></Table.Td>
             <Table.Td><TokenAmountCell address={trade.inputMint} amountRaw={trade.inputAmount} tokenMintData={inputMintData} isDeposit={false} /></Table.Td>
             <Table.Td><TokenAmountCell address={trade.outputMint} amountRaw={outputAmountWithFee} tokenMintData={outputMintData} isDeposit={false} /></Table.Td>
