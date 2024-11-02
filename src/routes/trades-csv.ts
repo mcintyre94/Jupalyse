@@ -40,7 +40,7 @@ type CSVDepositDataRow = {
 };
 
 export function convertToCSV(
-  items: (CSVTradeDataRow | CSVDepositDataRow)[]
+  items: (CSVTradeDataRow | CSVDepositDataRow)[],
 ): string {
   if (items.length === 0) {
     return "";
@@ -103,7 +103,7 @@ export function convertToCSV(
 function csvDataForTrade(trade: Trade, mints: MintData[]): CSVTradeDataRow {
   const inputMintData = mints.find((mint) => mint.address === trade.inputMint);
   const outputMintData = mints.find(
-    (mint) => mint.address === trade.outputMint
+    (mint) => mint.address === trade.outputMint,
   );
   const inputAmountFormatted = inputMintData
     ? numberDisplay(trade.inputAmount, inputMintData.decimals)
@@ -115,10 +115,10 @@ function csvDataForTrade(trade: Trade, mints: MintData[]): CSVTradeDataRow {
 
   if (outputMintData) {
     const outputAmountBigDecimal = new BigDecimal(
-      `${trade.outputAmount}E-${outputMintData.decimals}`
+      `${trade.outputAmount}E-${outputMintData.decimals}`,
     );
     const outputFeeBigDecimal = new BigDecimal(
-      `${trade.fee}E-${outputMintData.decimals}`
+      `${trade.fee}E-${outputMintData.decimals}`,
     );
     const outputAmountNetBigDecimal =
       outputAmountBigDecimal.subtract(outputFeeBigDecimal);
@@ -152,10 +152,10 @@ function csvDataForTrade(trade: Trade, mints: MintData[]): CSVTradeDataRow {
 
 function csvDataForDeposit(
   deposit: Deposit,
-  mints: MintData[]
+  mints: MintData[],
 ): CSVDepositDataRow {
   const inputMintData = mints.find(
-    (mint) => mint.address === deposit.inputMint
+    (mint) => mint.address === deposit.inputMint,
   );
   const inputAmountFormatted = inputMintData
     ? numberDisplay(deposit.inputAmount, inputMintData.decimals)
@@ -184,7 +184,7 @@ export async function action({ request }: ActionFunctionArgs) {
       } else {
         return csvDataForTrade(event, inputData.mints);
       }
-    }
+    },
   );
 
   const csvContent = convertToCSV(csvData);

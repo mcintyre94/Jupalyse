@@ -21,7 +21,7 @@ export async function getMintData(addresses: Address[]) {
 
   const fetchedMints = data.content.map((item) => item.address);
   const missingMints = addresses.filter(
-    (address) => !fetchedMints.includes(address)
+    (address) => !fetchedMints.includes(address),
   );
 
   if (missingMints.length > 0) {
@@ -33,7 +33,7 @@ export async function getMintData(addresses: Address[]) {
         // Jup returns the same structure
         const mintData = (await response.json()) as MintData;
         return mintData;
-      })
+      }),
     );
 
     return [...data.content, ...jupFallbackData];

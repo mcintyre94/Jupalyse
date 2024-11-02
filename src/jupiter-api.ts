@@ -8,7 +8,7 @@ import {
 
 export async function getClosedDCAs(address: Address) {
   const response = await fetch(
-    `https://dca-api.jup.ag/user/${address}?status=${DCAStatus.CLOSED}`
+    `https://dca-api.jup.ag/user/${address}?status=${DCAStatus.CLOSED}`,
   );
   const data = (await response.json()) as FetchDCAsResponse;
   if (!data.ok) {
@@ -19,7 +19,7 @@ export async function getClosedDCAs(address: Address) {
 
 export async function getOpenDCAs(address: Address) {
   const response = await fetch(
-    `https://dca-api.jup.ag/user/${address}?status=${DCAStatus.OPEN}`
+    `https://dca-api.jup.ag/user/${address}?status=${DCAStatus.OPEN}`,
   );
   const data = (await response.json()) as FetchDCAsResponse;
   if (!data.ok) {
@@ -30,7 +30,7 @@ export async function getOpenDCAs(address: Address) {
 
 export async function getClosedValueAverages(address: Address) {
   const response = await fetch(
-    `https://va.jup.ag/value-averages?user=${address}&status=${ValueAverageStatus.CLOSED}`
+    `https://va.jup.ag/value-averages?user=${address}&status=${ValueAverageStatus.CLOSED}`,
   );
   const data = (await response.json()) as FetchValueAveragesResponse;
   if (!data.ok) {
@@ -41,7 +41,7 @@ export async function getClosedValueAverages(address: Address) {
 
 export async function getOpenValueAverages(address: Address) {
   const response = await fetch(
-    `https://va.jup.ag/value-averages?user=${address}&status=${ValueAverageStatus.OPEN}`
+    `https://va.jup.ag/value-averages?user=${address}&status=${ValueAverageStatus.OPEN}`,
   );
   const data = (await response.json()) as FetchValueAveragesResponse;
   if (!data.ok) {
