@@ -37,6 +37,7 @@ import {
   IconCheck,
   IconArrowsUpDown,
   IconArrowLeft,
+  IconArrowsDownUp,
 } from "@tabler/icons-react";
 import { numberDisplay } from "../number-display";
 import BigDecimal from "js-big-decimal";
@@ -302,6 +303,7 @@ type TokenAmountCellProps = {
   amountRaw: StringifiedNumber;
   tokenMintData: MintData | undefined;
   isDeposit: boolean;
+  onNumberClick?: () => void;
 };
 
 function TokenAmountCell({
@@ -309,6 +311,7 @@ function TokenAmountCell({
   amountRaw,
   tokenMintData,
   isDeposit,
+  onNumberClick,
 }: TokenAmountCellProps) {
   const explorerLink = `https://explorer.solana.com/address/${address}`;
 
@@ -325,7 +328,9 @@ function TokenAmountCell({
       {isDeposit && <Text>Deposited</Text>}
       <Image src={tokenMintData.logoURI} width={16} height={16} />
       <Text>
-        {formattedAmount}{" "}
+        <Text component="span" onClick={onNumberClick}>
+          {formattedAmount}
+        </Text>{" "}
         <DottedAnchorLink href={explorerLink}>
           {tokenMintData.symbol}
         </DottedAnchorLink>
@@ -366,6 +371,7 @@ type RateCellProps = {
   inputMintData: MintData | undefined;
   outputMintData: MintData | undefined;
   rateType: RateType;
+  onNumberClick: () => void;
 };
 
 function RateCell({
@@ -374,6 +380,7 @@ function RateCell({
   inputMintData,
   outputMintData,
   rateType,
+  onNumberClick,
 }: RateCellProps) {
   if (!inputMintData || !outputMintData) {
     return <Text>Unknown</Text>;
@@ -400,7 +407,7 @@ function RateCell({
       ? `${rateInputOverOutput.getPrettyValue()} ${inputMintData.symbol} per ${outputMintData.symbol}`
       : `${rateOutputOverInput.getPrettyValue()} ${outputMintData.symbol} per ${inputMintData.symbol}`;
 
-  return <Text>{text}</Text>;
+  return <Text onClick={onNumberClick}>{text}</Text>;
 }
 
 function TransactionLinkCell({ txId }: { txId: string }) {
@@ -521,12 +528,13 @@ function TradeRow({
           isDeposit={false}
         />
       </Table.Td>
-      <Table.Td onClick={switchSubtractFee}>
+      <Table.Td>
         <TokenAmountCell
           address={trade.outputMint}
           amountRaw={outputAmountWithFee}
           tokenMintData={outputMintData}
           isDeposit={false}
+          onNumberClick={switchSubtractFee}
         />
       </Table.Td>
       <Table.Td onClick={switchRateType}>
@@ -536,6 +544,7 @@ function TradeRow({
           inputMintData={inputMintData}
           outputMintData={outputMintData}
           rateType={rateType}
+          onNumberClick={switchRateType}
         />
       </Table.Td>
       <Table.Td>
@@ -657,10 +666,17 @@ export default function Fills() {
                   variant="subtle"
                   aria-label="Switch rate type"
                 >
-                  <IconArrowsUpDown
-                    style={{ width: "70%", height: "70%" }}
-                    stroke={1.5}
-                  />
+                  {rateType === RateType.OUTPUT_PER_INPUT ? (
+                    <IconArrowsUpDown
+                      style={{ width: "70%", height: "70%" }}
+                      stroke={1.5}
+                    />
+                  ) : (
+                    <IconArrowsDownUp
+                      style={{ width: "70%", height: "70%" }}
+                      stroke={1.5}
+                    />
+                  )}
                 </ActionIcon>
               </Group>
             </Table.Th>
