@@ -313,15 +313,34 @@ function TokenAmountCell({
   isDeposit,
   onNumberClick,
 }: TokenAmountCellProps) {
+  const [usdValue, setUsdValue] = useState(null);
   const explorerLink = `https://explorer.solana.com/address/${address}`;
-
+  
   if (!tokenMintData) {
-    return (
-      <DottedAnchorLink href={explorerLink}>Unknown Token</DottedAnchorLink>
-    );
+    return <DottedAnchorLink href={explorerLink}>Unknown Token</DottedAnchorLink>;
   }
 
   const formattedAmount = numberDisplay(amountRaw, tokenMintData.decimals);
+
+  useEffect(() => {
+    // Fetch USD price asynchronously and update the state
+    const fetchUsdPrice = async () => {
+      try {
+        const geckoReq = await fetch(
+          `https://api.geckoterminal.com/api/v2/simple/networks/solana/token_price/${address}`
+        );
+        const geckoRes = await geckoReq.json();
+        const usdPrice = parseFloat(geckoRes.data.attributes.token_prices[address]);
+        setUsdValue((parseFloat(amountRaw)/(10**tokenMintData.decimals))*usdPrice);
+      } catch (error) {
+        console.error("Failed to fetch USD price:", error);
+        setUsdValue(null);
+      }
+    };
+
+    fetchUsdPrice();
+  }, [address, formattedAmount]);
+
 
   return (
     <Flex gap="micro" direction="row" align="center">
@@ -329,7 +348,12 @@ function TokenAmountCell({
       <Image src={tokenMintData.logoURI} width={16} height={16} />
       <Text>
         <Text component="span" onClick={onNumberClick}>
-          {formattedAmount}
+          {formattedAmount}{" "}
+          {usdValue !== null && (
+            <small style={{ fontSize: "0.75em", color: "gray" }}>
+              ${usdValue.toFixed(2)}
+            </small>
+          )}
         </Text>{" "}
         <DottedAnchorLink href={explorerLink}>
           {tokenMintData.symbol}
