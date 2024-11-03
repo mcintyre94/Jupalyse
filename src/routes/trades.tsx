@@ -313,9 +313,9 @@ function TokenAmountCell({
   isDeposit,
   onNumberClick,
 }: TokenAmountCellProps) {
-  const [usdValue, setUsdValue] = useState(null);
+  const [usdValue, setUsdValue] = useState<number | null>(null);
   const explorerLink = `https://explorer.solana.com/address/${address}`;
-  
+
   if (!tokenMintData) {
     return <DottedAnchorLink href={explorerLink}>Unknown Token</DottedAnchorLink>;
   }
