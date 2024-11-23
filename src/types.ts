@@ -101,6 +101,24 @@ export type FetchValueAverageFillsResponse = {
   };
 };
 
+export type LimitOrderFetchedAccount = {
+  orderKey: Address;
+  inputMint: Address;
+  outputMint: Address;
+  /** Note: amount of input mint, already adjusted for decimals */
+  makingAmount: StringifiedNumber;
+  createdAt: StringifiedDate;
+  // TODO: waiting to find out more status values
+  status: "Completed" | "Cancelled";
+  trades: any[];
+};
+
+export type LimitOrderOrdersResponse = {
+  orders: LimitOrderFetchedAccount[];
+  hasMoreData: boolean;
+  page: number;
+};
+
 export type Deposit = {
   kind: "deposit";
   date: Date;

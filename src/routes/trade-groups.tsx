@@ -21,6 +21,7 @@ import {
 import {
   DCAFetchedAccount,
   DCAStatus,
+  LimitOrderFetchedAccount,
   MintData,
   ValueAverageFetchedAccount,
   ValueAverageStatus,
@@ -34,6 +35,7 @@ import {
   getOpenDCAs,
   getClosedValueAverages,
   getOpenValueAverages,
+  getLimitOrdersWithTrades,
 } from "../jupiter-api";
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
@@ -43,13 +45,19 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     throw new Error("Invalid address");
   }
 
-  const [closedDCAs, openDCAs, closedValueAverages, openValueAverages] =
-    await Promise.all([
-      getClosedDCAs(address),
-      getOpenDCAs(address),
-      getClosedValueAverages(address),
-      getOpenValueAverages(address),
-    ]);
+  const [
+    closedDCAs,
+    openDCAs,
+    closedValueAverages,
+    openValueAverages,
+    limitOrders,
+  ] = await Promise.all([
+    getClosedDCAs(address),
+    getOpenDCAs(address),
+    getClosedValueAverages(address),
+    getOpenValueAverages(address),
+    getLimitOrdersWithTrades(address),
+  ]);
 
   const uniqueMintAddresses: Address[] = Array.from(
     new Set<Address>([
@@ -57,6 +65,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       ...openDCAs.flatMap((dca) => [dca.inputMint, dca.outputMint]),
       ...closedValueAverages.flatMap((va) => [va.inputMint, va.outputMint]),
       ...openValueAverages.flatMap((va) => [va.inputMint, va.outputMint]),
+      ...limitOrders.flatMap((order) => [order.inputMint, order.outputMint]),
     ]),
   );
 
@@ -68,145 +77,322 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const valueAverageKeys = new Set(
     new URL(request.url).searchParams.getAll("va") as Address[],
   );
+  const limitOrderKeys = new Set(
+    new URL(request.url).searchParams.getAll("lo") as Address[],
+  );
   return {
     dcas: [...closedDCAs, ...openDCAs],
     valueAverages: [...closedValueAverages, ...openValueAverages],
+    limitOrders,
     selectedDcaKeys: dcaKeys,
     selectedValueAverageKeys: valueAverageKeys,
+    selectedLimitOrderKeys: limitOrderKeys,
     mints,
   };
 }
 
-type SingleItemCheckboxGroupProps = {
+type AccountWithType =
+  | { account: DCAFetchedAccount; type: "dca" }
+  | { account: ValueAverageFetchedAccount; type: "va" }
+  | { account: LimitOrderFetchedAccount; type: "lo" };
+
+type AccountsWithType =
+  | { accounts: DCAFetchedAccount[]; type: "dca" }
+  | { accounts: ValueAverageFetchedAccount[]; type: "va" }
+  | { accounts: LimitOrderFetchedAccount[]; type: "lo" };
+
+function getKey(accountWithType: AccountWithType) {
+  const { account, type } = accountWithType;
+  if (type === "dca") {
+    return account.dcaKey;
+  }
+  if (type === "va") {
+    return account.valueAverageKey;
+  }
+  return account.orderKey;
+}
+
+function getInputAmountWithSymbol(
+  accountWithType: AccountWithType,
+  inputMintData: MintData | undefined,
+): String {
+  const { account, type } = accountWithType;
+
+  if (type === "dca" || type === "va") {
+    if (inputMintData) {
+      return `${numberDisplay(account.inDeposited, inputMintData.decimals)} ${inputMintData.symbol}`;
+    }
+    return `Unknown Amount (${account.inputMint})`;
+  }
+
+  // limit order
+  if (inputMintData) {
+    // makingAmount is already adjusted for decimals, but is not optimal for display to users
+    return `${numberDisplay(account.makingAmount, 0)} ${inputMintData.symbol}`;
+  }
+  return `${account.makingAmount} (Unknown (${account.inputMint}))`;
+}
+
+function getOutputDisplay(
+  account: AccountWithType["account"],
+  mints: MintData[],
+): string {
+  const outputMintData = mints.find(
+    (mint) => mint.address === account.outputMint,
+  );
+
+  if (outputMintData) {
+    return outputMintData.symbol;
+  }
+  return `Unknown (${account.outputMint})`;
+}
+
+function getIsOpen(
+  accountWithType: Extract<AccountWithType, { type: "dca" | "va" }>,
+): boolean {
+  const { account, type } = accountWithType;
+  if (type === "dca") {
+    return account.status === DCAStatus.OPEN;
+  }
+  return account.status === ValueAverageStatus.OPEN;
+}
+
+function getLimitOrderStatusText(limitOrder: LimitOrderFetchedAccount) {
+  const { status, trades } = limitOrder;
+
+  if (status === "Completed") {
+    if (trades.length === 0) {
+      return "Completed with no trades";
+    }
+    if (trades.length === 1) {
+      return "Completed after 1 trade";
+    }
+    return `Completed after ${trades.length} trades`;
+  }
+
+  if (status === "Cancelled") {
+    if (trades.length === 0) {
+      return "Cancelled with no trades";
+    }
+    if (trades.length === 1) {
+      return "Cancelled after 1 trade";
+    }
+    return `Cancelled after ${trades.length} trades`;
+  }
+
+  // TODO: other status values
+  return undefined;
+}
+
+function SingleItemCheckboxLabel({
+  accountWithType,
+  mints,
+}: {
+  accountWithType: AccountWithType;
+  mints: MintData[];
+}) {
+  const { account, type } = accountWithType;
+
+  const inputMintData = mints.find(
+    (mint) => mint.address === account.inputMint,
+  );
+
+  const inputAmountWithSymbol = getInputAmountWithSymbol(
+    accountWithType,
+    inputMintData,
+  );
+  const outputDisplay = getOutputDisplay(account, mints);
+
+  const createdAtDate = new Date(account.createdAt);
+  const friendlyDate = createdAtDate.toLocaleDateString();
+  const friendlyTime = createdAtDate.toLocaleTimeString();
+
+  if (type === "dca" || type === "va") {
+    const isOpen = getIsOpen(accountWithType);
+
+    return (
+      <Group>
+        <Text size="sm">
+          {inputAmountWithSymbol} {"->"} {outputDisplay} • Started{" "}
+          {friendlyDate} {friendlyTime}
+        </Text>
+        {isOpen ? (
+          <Badge size="xs" variant="outline" c="green.1">
+            Open
+          </Badge>
+        ) : null}
+      </Group>
+    );
+  }
+
+  if (type === "lo") {
+    const statusText = getLimitOrderStatusText(account);
+    return (
+      <Group>
+        <Text size="sm">
+          {inputAmountWithSymbol} {"->"} {outputDisplay} • Opened {friendlyDate}{" "}
+          {friendlyTime} {statusText ? `• ${statusText}` : null}
+        </Text>
+      </Group>
+    );
+  }
+}
+
+type BaseCheckboxGroupProps = {
   selectedKeys: Set<Address>;
   mints: MintData[];
-  account: DCAFetchedAccount | ValueAverageFetchedAccount;
-  field: "dca" | "va";
+};
+
+type SingleItemCheckboxGroupProps = BaseCheckboxGroupProps & {
+  accountWithType: AccountWithType;
 };
 
 function SingleItemCheckboxGroup({
   selectedKeys,
   mints,
-  account,
-  field,
+  accountWithType,
 }: SingleItemCheckboxGroupProps) {
-  const key = "dcaKey" in account ? account.dcaKey : account.valueAverageKey;
-  const inputMintData = mints.find(
-    (mint) => mint.address === account.inputMint,
-  );
-  const outputMintData = mints.find(
-    (mint) => mint.address === account.outputMint,
-  );
-
-  const inputAmount = inputMintData
-    ? `${numberDisplay(account.inDeposited, inputMintData.decimals)} ${inputMintData.symbol}`
-    : "Unknown Amount";
-  const isOpen =
-    "dcaKey" in account
-      ? account.status === DCAStatus.OPEN
-      : account.status === ValueAverageStatus.OPEN;
-
-  const date = new Date(account.createdAt);
-  const friendlyDate = date.toLocaleDateString();
-  const friendlyTime = date.toLocaleTimeString();
+  const key = getKey(accountWithType);
+  const defaultChecked = getDefaultChecked(selectedKeys, key);
 
   return (
     <Checkbox
-      defaultChecked={selectedKeys.size === 0 || selectedKeys.has(key)}
+      defaultChecked={defaultChecked}
       label={
-        <Group>
-          <Text size="sm">
-            {inputAmount} {"->"}{" "}
-            {outputMintData?.symbol ?? `Unknown (${account.outputMint})`} -
-            Started {friendlyDate} {friendlyTime}
-          </Text>
-          {isOpen ? (
-            <Badge size="xs" variant="outline" c="green.1">
-              Open
-            </Badge>
-          ) : null}
-        </Group>
+        <SingleItemCheckboxLabel
+          accountWithType={accountWithType}
+          mints={mints}
+        />
       }
-      name={field}
+      name={accountWithType.type}
       value={key}
     />
   );
 }
 
-type BaseCheckboxGroupProps = {
-  mints: MintData[];
-  selectedKeys: Set<Address>;
-};
+function getGroupLabel(
+  account: AccountsWithType["accounts"][0],
+  inputMintData: MintData | undefined,
+  outputMintData: MintData | undefined,
+) {
+  const { inputMint, outputMint } = account;
+  return `${inputMintData?.symbol ?? `Unknown (${inputMint})`} -> ${outputMintData?.symbol ?? `Unknown (${outputMint})`}`;
+}
 
-type CheckboxGroupProps = BaseCheckboxGroupProps &
-  (
-    | {
-        accounts: DCAFetchedAccount[];
-        field: "dca";
-      }
-    | {
-        accounts: ValueAverageFetchedAccount[];
-        field: "va";
-      }
+function getFirstAccountWithType(
+  accountsWithType: AccountsWithType,
+): AccountWithType {
+  if (accountsWithType.type === "dca") {
+    return {
+      account: accountsWithType.accounts[0],
+      type: "dca",
+    };
+  }
+  if (accountsWithType.type === "va") {
+    return {
+      account: accountsWithType.accounts[0],
+      type: "va",
+    };
+  }
+  return {
+    account: accountsWithType.accounts[0],
+    type: "lo",
+  };
+}
+
+function CheckboxGroupItemLabel({
+  accountWithType,
+  inputMintData,
+}: {
+  accountWithType: AccountWithType;
+  inputMintData: MintData | undefined;
+}) {
+  const { account, type } = accountWithType;
+
+  const inputAmountWithSymbol = getInputAmountWithSymbol(
+    accountWithType,
+    inputMintData,
   );
 
-function CheckboxGroup({
-  accounts,
-  field,
-  selectedKeys,
-  mints,
-}: CheckboxGroupProps) {
-  if (accounts.length === 0) {
-    return null;
-  }
+  const date = new Date(account.createdAt);
+  const friendlyDate = date.toLocaleDateString();
+  const friendlyTime = date.toLocaleTimeString();
 
-  if (accounts.length === 1) {
+  if (type === "dca" || type === "va") {
+    const isOpen = getIsOpen(accountWithType);
+
     return (
-      <SingleItemCheckboxGroup
-        selectedKeys={selectedKeys}
-        mints={mints}
-        account={accounts[0]}
-        field={field}
-      />
+      <Group align="center">
+        <Text size="sm">
+          {inputAmountWithSymbol} • Started {friendlyDate} {friendlyTime}
+        </Text>
+        {isOpen ? (
+          <Badge size="xs" variant="outline" c="green.1">
+            Open
+          </Badge>
+        ) : null}
+      </Group>
     );
   }
 
-  const { inputMint, outputMint } = accounts[0];
-  const inputMintData = mints.find((mint) => mint.address === inputMint);
-  const outputMintData = mints.find((mint) => mint.address === outputMint);
-  const groupLabel = `${inputMintData?.symbol ?? `Unknown (${inputMint})`} -> ${outputMintData?.symbol ?? `Unknown (${outputMint})`}`;
+  if (type === "lo") {
+    const statusText = getLimitOrderStatusText(account);
+    return (
+      <Group align="center">
+        <Text size="sm">
+          {inputAmountWithSymbol} • Opened {friendlyDate} {friendlyTime}{" "}
+          {statusText ? `• ${statusText}` : null}
+        </Text>
+      </Group>
+    );
+  }
+}
+
+type MultipleItemCheckboxGroupProps = BaseCheckboxGroupProps & {
+  accountsWithType: AccountsWithType;
+};
+
+function MultipleItemCheckboxGroup({
+  selectedKeys,
+  mints,
+  accountsWithType,
+}: MultipleItemCheckboxGroupProps) {
+  const { accounts, type } = accountsWithType;
+
+  const inputMintData = mints.find(
+    (mint) => mint.address === accounts[0].inputMint,
+  );
+  const outputMintData = mints.find(
+    (mint) => mint.address === accounts[0].outputMint,
+  );
+
+  const groupLabel = getGroupLabel(
+    accountsWithType.accounts[0],
+    inputMintData,
+    outputMintData,
+  );
 
   const initialValues = accounts
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     .map((account) => {
-      const date = new Date(account.createdAt);
-      const friendlyDate = date.toLocaleDateString();
-      const friendlyTime = date.toLocaleTimeString();
-      const inputAmount = inputMintData
-        ? `${numberDisplay(account.inDeposited, inputMintData.decimals)} ${inputMintData.symbol}`
-        : "Unknown Amount";
+      const accountWithType: AccountWithType = {
+        account,
+        type,
+      } as AccountWithType;
+      const inputMintData = mints.find(
+        (mint) => mint.address === account.inputMint,
+      );
 
-      const key =
-        "dcaKey" in account ? account.dcaKey : account.valueAverageKey;
-      const isOpen =
-        field === "dca"
-          ? account.status === DCAStatus.OPEN
-          : account.status === ValueAverageStatus.OPEN;
+      const key = getKey(accountWithType);
 
       return {
         label: (
-          <Group align="center">
-            <Text size="sm">
-              {inputAmount} - Started {friendlyDate} {friendlyTime}
-            </Text>
-            {isOpen ? (
-              <Badge size="xs" variant="outline" c="green.1">
-                Open
-              </Badge>
-            ) : null}
-          </Group>
+          <CheckboxGroupItemLabel
+            accountWithType={accountWithType}
+            inputMintData={inputMintData}
+          />
         ),
-        checked: selectedKeys.size === 0 || selectedKeys.has(key),
+        checked: getDefaultChecked(selectedKeys, key),
         key,
       };
     });
@@ -222,7 +408,7 @@ function CheckboxGroup({
       label={value.label}
       key={value.key}
       checked={value.checked}
-      name={field}
+      name={type}
       value={value.key}
       onChange={(event) =>
         handlers.setItemProp(index, "checked", event.currentTarget.checked)
@@ -247,6 +433,47 @@ function CheckboxGroup({
   );
 }
 
+type CheckboxGroupProps = BaseCheckboxGroupProps & {
+  accountsWithType:
+    | { accounts: DCAFetchedAccount[]; type: "dca" }
+    | { accounts: ValueAverageFetchedAccount[]; type: "va" }
+    | { accounts: LimitOrderFetchedAccount[]; type: "lo" };
+};
+
+function CheckboxGroup({
+  accountsWithType,
+  selectedKeys,
+  mints,
+}: CheckboxGroupProps) {
+  if (accountsWithType.accounts.length === 0) {
+    return null;
+  }
+
+  if (accountsWithType.accounts.length === 1) {
+    return (
+      <SingleItemCheckboxGroup
+        selectedKeys={selectedKeys}
+        mints={mints}
+        accountWithType={getFirstAccountWithType(accountsWithType)}
+      />
+    );
+  }
+
+  return (
+    <MultipleItemCheckboxGroup
+      selectedKeys={selectedKeys}
+      mints={mints}
+      accountsWithType={accountsWithType}
+    />
+  );
+}
+
+function getDefaultChecked(selectedKeys: Set<Address>, key: Address) {
+  // If no pre-selected keys then select all
+  // Otherwise only select pre-selected keys
+  return selectedKeys.size === 0 || selectedKeys.has(key);
+}
+
 function ChangeAddressButton() {
   return (
     <Button
@@ -268,8 +495,10 @@ export default function TradeGroups() {
   const {
     dcas,
     valueAverages,
+    limitOrders,
     selectedDcaKeys,
     selectedValueAverageKeys,
+    selectedLimitOrderKeys,
     mints,
   } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
 
@@ -297,9 +526,20 @@ export default function TradeGroups() {
     {} as Record<string, ValueAverageFetchedAccount[]>,
   );
 
+  const groupedLimitOrders = limitOrders.reduce(
+    (acc, lo) => {
+      const key = `${lo.inputMint}-${lo.outputMint}`;
+      acc[key] ??= [];
+      acc[key].push(lo);
+      return acc;
+    },
+    {} as Record<string, LimitOrderFetchedAccount[]>,
+  );
+
   const allSelectedKeys = new Set([
     ...selectedDcaKeys,
     ...selectedValueAverageKeys,
+    ...selectedLimitOrderKeys,
   ]);
 
   return (
@@ -314,21 +554,25 @@ export default function TradeGroups() {
         <Form action="/trades">
           <Stack align="flex-start" gap="xl">
             <input type="hidden" name="userAddress" value={address} />
+
             {Object.keys(groupedDCAs).length > 0 ? (
               <Stack gap="sm">
                 <Title order={4}>DCAs (Dollar-Cost Averages)</Title>
                 {Object.entries(groupedDCAs).map(([key, dcas]) => (
                   <CheckboxGroup
                     key={key}
-                    accounts={dcas}
-                    field="dca"
+                    accountsWithType={{
+                      accounts: dcas,
+                      type: "dca",
+                    }}
+                    // Note: we pass allSelectedKeys so that if any trades in any groups are pre-selected, we only select them
                     selectedKeys={allSelectedKeys}
                     mints={mints}
                   />
                 ))}
               </Stack>
             ) : (
-              <Text>No Jupiter DCAs found for {address}</Text>
+              <Text fs="italic">No Jupiter DCAs found for {address}</Text>
             )}
 
             {Object.keys(groupedValueAverages).length > 0 ? (
@@ -337,15 +581,38 @@ export default function TradeGroups() {
                 {Object.entries(groupedValueAverages).map(([key, vas]) => (
                   <CheckboxGroup
                     key={key}
-                    accounts={vas}
-                    field="va"
+                    accountsWithType={{
+                      accounts: vas,
+                      type: "va",
+                    }}
                     selectedKeys={allSelectedKeys}
                     mints={mints}
                   />
                 ))}
               </Stack>
             ) : (
-              <Text>No Jupiter VAs found for {address}</Text>
+              <Text fs="italic">No Jupiter VAs found for {address}</Text>
+            )}
+
+            {Object.keys(groupedLimitOrders).length > 0 ? (
+              <Stack gap="sm">
+                <Title order={4}>Limit Orders</Title>
+                {Object.entries(groupedLimitOrders).map(([key, los]) => (
+                  <CheckboxGroup
+                    key={key}
+                    accountsWithType={{
+                      accounts: los,
+                      type: "lo",
+                    }}
+                    selectedKeys={allSelectedKeys}
+                    mints={mints}
+                  />
+                ))}
+              </Stack>
+            ) : (
+              <Text fs="italic">
+                No Jupiter Limit Orders found for {address}
+              </Text>
             )}
 
             <Button type="submit" loading={isLoading}>
