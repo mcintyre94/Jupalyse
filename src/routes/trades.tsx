@@ -11,6 +11,7 @@ import {
   FetchDCAFillsResponse,
   FetchValueAverageFillsResponse,
   MintData,
+  StrategyType,
   StringifiedNumber,
   Trade,
 } from "../types";
@@ -83,8 +84,8 @@ async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
         adjustedForDecimals: false,
       },
       txSignature: fill.txId,
-      tradeGroupType: "dca",
-      tradeGroupKey: fill.dcaKey,
+      strategyType: "dca",
+      strategyKey: fill.dcaKey,
       userAddress: fill.userKey,
       transactionSignature: fill.txId,
     };
@@ -123,8 +124,8 @@ async function getValueAverageFills(
         adjustedForDecimals: false,
       },
       txSignature: fill.txSignature,
-      tradeGroupType: "value average",
-      tradeGroupKey: fill.valueAverageKey,
+      strategyType: "value average",
+      strategyKey: fill.valueAverageKey,
       userAddress: fill.userKey,
       transactionSignature: fill.txSignature,
     };
@@ -160,8 +161,8 @@ async function getLimitOrderTrades(
       amount: trade.feeAmount,
       adjustedForDecimals: true,
     },
-    tradeGroupType: "limit order",
-    tradeGroupKey: trade.orderKey,
+    strategyType: "limit order",
+    strategyKey: trade.orderKey,
     userAddress,
     transactionSignature: trade.txId,
   }));
@@ -205,8 +206,8 @@ async function getDeposits(
       amount: dca.inDeposited,
       adjustedForDecimals: false,
     },
-    tradeGroupType: "dca",
-    tradeGroupKey: dca.dcaKey,
+    strategyType: "dca",
+    strategyKey: dca.dcaKey,
     userAddress: userAddress,
     transactionSignature: dca.openTxHash,
   }));
@@ -219,8 +220,8 @@ async function getDeposits(
       amount: va.inDeposited,
       adjustedForDecimals: false,
     },
-    tradeGroupType: "value average",
-    tradeGroupKey: va.valueAverageKey,
+    strategyType: "value average",
+    strategyKey: va.valueAverageKey,
     userAddress: userAddress,
     transactionSignature: va.openTxHash,
   }));
@@ -233,8 +234,8 @@ async function getDeposits(
       amount: order.makingAmount,
       adjustedForDecimals: true,
     },
-    tradeGroupType: "limit order",
-    tradeGroupKey: order.orderKey,
+    strategyType: "limit order",
+    strategyKey: order.orderKey,
     userAddress: userAddress,
     transactionSignature: order.openTx,
   }));
@@ -587,11 +588,11 @@ function TransactionKindCell({ kind }: { kind: "deposit" | "trade" }) {
 }
 
 function TransactionProductCell({
-  tradeGroupType,
+  strategyType,
 }: {
-  tradeGroupType: "dca" | "value average" | "limit order";
+  strategyType: StrategyType;
 }) {
-  if (tradeGroupType === "dca") {
+  if (strategyType === "dca") {
     return (
       <Badge size="xs" variant="light" c="green.1">
         DCA
@@ -599,7 +600,7 @@ function TransactionProductCell({
     );
   }
 
-  if (tradeGroupType === "value average") {
+  if (strategyType === "value average") {
     return (
       <Badge size="xs" variant="light" c="blue.1">
         VA
@@ -765,7 +766,7 @@ function TradeRow({
         <TransactionLinkCell txId={trade.transactionSignature} />
       </Table.Td>
       <Table.Td>
-        <TransactionProductCell tradeGroupType={trade.tradeGroupType} />
+        <TransactionProductCell strategyType={trade.strategyType} />
       </Table.Td>
     </Table.Tr>
   );
@@ -801,7 +802,7 @@ function DepositRow({ deposit, mints }: DepositRowProps) {
         <TransactionLinkCell txId={deposit.transactionSignature} />
       </Table.Td>
       <Table.Td>
-        <TransactionProductCell tradeGroupType={deposit.tradeGroupType} />
+        <TransactionProductCell strategyType={deposit.strategyType} />
       </Table.Td>
     </Table.Tr>
   );

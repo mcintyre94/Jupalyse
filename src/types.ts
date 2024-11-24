@@ -139,13 +139,15 @@ export type AmountToDisplay = {
   adjustedForDecimals: boolean;
 };
 
+export type StrategyType = "dca" | "value average" | "limit order";
+
 export type Deposit = {
   kind: "deposit";
   date: Date;
   inputMint: Address;
   inputAmount: AmountToDisplay;
-  tradeGroupType: "dca" | "value average" | "limit order";
-  tradeGroupKey: Address;
+  strategyType: StrategyType;
+  strategyKey: Address;
   userAddress: Address;
   transactionSignature: Signature;
 };
@@ -158,8 +160,8 @@ export type Trade = {
   inputAmount: AmountToDisplay;
   outputAmount: AmountToDisplay;
   fee: AmountToDisplay;
-  tradeGroupType: "dca" | "value average" | "limit order";
-  tradeGroupKey: Address;
+  strategyType: StrategyType;
+  strategyKey: Address;
   userAddress: Address;
   transactionSignature: Signature;
 };

@@ -1,5 +1,11 @@
 import { ActionFunctionArgs } from "react-router-dom";
-import { Trade, MintData, Deposit, AmountToDisplay } from "../types";
+import {
+  Trade,
+  MintData,
+  Deposit,
+  AmountToDisplay,
+  StrategyType,
+} from "../types";
 import { Address, Signature, StringifiedNumber } from "@solana/web3.js";
 import {
   numberDisplay,
@@ -11,6 +17,8 @@ type InputData = {
   events: (Deposit | Trade)[];
   mints: MintData[];
 };
+
+type ShortStrategyType = "DCA" | "VA" | "LO";
 
 type CSVTradeDataRow = {
   kind: "trade";
@@ -26,8 +34,8 @@ type CSVTradeDataRow = {
   outAmountFee: StringifiedNumber;
   outAmountNet: StringifiedNumber;
   transactionSignature: Signature;
-  tradeGroupType: "DCA" | "VA" | "LO";
-  tradeGroupKey: Address;
+  strategyType: ShortStrategyType;
+  strategyKey: Address;
 };
 
 type CSVDepositDataRow = {
@@ -38,8 +46,8 @@ type CSVDepositDataRow = {
   inTokenSymbol: string;
   inAmount: StringifiedNumber;
   transactionSignature: Signature;
-  tradeGroupType: "DCA" | "VA" | "LO";
-  tradeGroupKey: Address;
+  strategyType: ShortStrategyType;
+  strategyKey: Address;
 };
 
 export function convertToCSV(
@@ -62,8 +70,8 @@ export function convertToCSV(
     "outAmountFee",
     "outAmountNet",
     "transactionSignature",
-    "tradeGroupType",
-    "tradeGroupKey",
+    "strategyType",
+    "strategyKey",
   ];
   const headerNames = [
     "Kind",
@@ -79,8 +87,8 @@ export function convertToCSV(
     "Out Amount (fee)",
     "Out Amount (net)",
     "Transaction Signature",
-    "Trade Group Type",
-    "Trade Group Key",
+    "Strategy Type",
+    "Strategy Key",
   ];
   const csvRows = [headerNames.join(",")];
 
@@ -121,13 +129,11 @@ function getAmountBigDecimal(
     : new BigDecimal(`${amountToDisplay.amount}E-${decimals}`);
 }
 
-function getTradeGroupType(
-  tradeGroupType: Trade["tradeGroupType"],
-): "DCA" | "VA" | "LO" {
-  if (tradeGroupType === "dca") return "DCA";
-  if (tradeGroupType === "value average") return "VA";
-  if (tradeGroupType === "limit order") return "LO";
-  throw new Error(`Unknown trade group type: ${tradeGroupType}`);
+function getShortStrategyType(strategyType: StrategyType): ShortStrategyType {
+  if (strategyType === "dca") return "DCA";
+  if (strategyType === "value average") return "VA";
+  if (strategyType === "limit order") return "LO";
+  throw new Error(`Unknown strategy type: ${strategyType}`);
 }
 
 function csvDataForTrade(trade: Trade, mints: MintData[]): CSVTradeDataRow {
@@ -178,8 +184,8 @@ function csvDataForTrade(trade: Trade, mints: MintData[]): CSVTradeDataRow {
     outAmountFee: outputAmountFeeFormatted as StringifiedNumber,
     outAmountNet: outputAmountNetFormatted as StringifiedNumber,
     transactionSignature: trade.transactionSignature,
-    tradeGroupType: getTradeGroupType(trade.tradeGroupType),
-    tradeGroupKey: trade.tradeGroupKey,
+    strategyType: getShortStrategyType(trade.strategyType),
+    strategyKey: trade.strategyKey,
   };
 }
 
@@ -202,8 +208,8 @@ function csvDataForDeposit(
     inTokenSymbol: inputMintData?.symbol ?? "",
     inAmount: inputAmountFormatted as StringifiedNumber,
     transactionSignature: deposit.transactionSignature,
-    tradeGroupType: getTradeGroupType(deposit.tradeGroupType),
-    tradeGroupKey: deposit.tradeGroupKey,
+    strategyType: getShortStrategyType(deposit.strategyType),
+    strategyKey: deposit.strategyKey,
   };
 }
 
