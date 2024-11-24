@@ -101,16 +101,31 @@ export type FetchValueAverageFillsResponse = {
   };
 };
 
+type LimitOrderTrade = {
+  confirmedAt: StringifiedDate;
+  inputMint: Address;
+  outputMint: Address;
+  /** Note: already adjusted for decimals */
+  inputAmount: StringifiedNumber;
+  /** Note: already adjusted for decimals */
+  outputAmount: StringifiedNumber;
+  /** Note: already adjusted for decimals */
+  feeAmount: StringifiedNumber;
+  orderKey: Address;
+  txId: Signature;
+};
+
 export type LimitOrderFetchedAccount = {
   orderKey: Address;
   inputMint: Address;
   outputMint: Address;
-  /** Note: amount of input mint, already adjusted for decimals */
+  /** Note: already adjusted for decimals */
   makingAmount: StringifiedNumber;
   createdAt: StringifiedDate;
   // TODO: waiting to find out more status values
   status: "Completed" | "Cancelled";
-  trades: any[];
+  openTx: Signature;
+  trades: LimitOrderTrade[];
 };
 
 export type LimitOrderOrdersResponse = {
@@ -123,8 +138,11 @@ export type Deposit = {
   kind: "deposit";
   date: Date;
   inputMint: Address;
-  inputAmount: StringifiedNumber;
-  tradeGroupType: "dca" | "value average";
+  inputAmount: {
+    amount: StringifiedNumber;
+    adjustedForDecimals: boolean;
+  };
+  tradeGroupType: "dca" | "value average" | "limit order";
   tradeGroupKey: Address;
   userAddress: Address;
   transactionSignature: Signature;
@@ -135,10 +153,19 @@ export type Trade = {
   date: Date;
   inputMint: Address;
   outputMint: Address;
-  inputAmount: StringifiedNumber;
-  outputAmount: StringifiedNumber;
-  fee: StringifiedNumber;
-  tradeGroupType: "dca" | "value average";
+  inputAmount: {
+    amount: StringifiedNumber;
+    adjustedForDecimals: boolean;
+  };
+  outputAmount: {
+    amount: StringifiedNumber;
+    adjustedForDecimals: boolean;
+  };
+  fee: {
+    amount: StringifiedNumber;
+    adjustedForDecimals: boolean;
+  };
+  tradeGroupType: "dca" | "value average" | "limit order";
   tradeGroupKey: Address;
   userAddress: Address;
   transactionSignature: Signature;

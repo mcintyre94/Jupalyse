@@ -39,11 +39,15 @@ import {
   IconArrowLeft,
   IconArrowsDownUp,
 } from "@tabler/icons-react";
-import { numberDisplay } from "../number-display";
+import {
+  numberDisplay,
+  numberDisplayAlreadyAdjustedForDecimals,
+} from "../number-display";
 import BigDecimal from "js-big-decimal";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getClosedValueAverages,
+  getLimitOrdersWithTrades,
   getOpenDCAs,
   getOpenValueAverages,
 } from "../jupiter-api";
@@ -65,9 +69,18 @@ async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
       date: new Date(fill.confirmedAt * 1000),
       inputMint: fill.inputMint,
       outputMint: fill.outputMint,
-      inputAmount: fill.inAmount,
-      outputAmount: fill.outAmount,
-      fee: fill.fee,
+      inputAmount: {
+        amount: fill.inAmount,
+        adjustedForDecimals: false,
+      },
+      outputAmount: {
+        amount: fill.outAmount,
+        adjustedForDecimals: false,
+      },
+      fee: {
+        amount: fill.fee,
+        adjustedForDecimals: false,
+      },
       txSignature: fill.txId,
       tradeGroupType: "dca",
       tradeGroupKey: fill.dcaKey,
@@ -96,9 +109,18 @@ async function getValueAverageFills(
       date: new Date(fill.confirmedAt * 1000),
       inputMint: fill.inputMint,
       outputMint: fill.outputMint,
-      inputAmount: fill.inputAmount,
-      outputAmount: fill.outputAmount,
-      fee: fill.fee,
+      inputAmount: {
+        amount: fill.inputAmount,
+        adjustedForDecimals: false,
+      },
+      outputAmount: {
+        amount: fill.outputAmount,
+        adjustedForDecimals: false,
+      },
+      fee: {
+        amount: fill.fee,
+        adjustedForDecimals: false,
+      },
       txSignature: fill.txSignature,
       tradeGroupType: "value average",
       tradeGroupKey: fill.valueAverageKey,
@@ -108,18 +130,61 @@ async function getValueAverageFills(
   });
 }
 
+async function getLimitOrderTrades(
+  userAddress: Address,
+  limitOrderKeys: Address[],
+): Promise<Trade[]> {
+  // Limit orders are fetched by user address, so fetch them all (cached with react-query),
+  // then filter to only those selected
+  const limitOrders = await getLimitOrdersWithTrades(userAddress);
+  const limitOrderKeysSet = new Set(limitOrderKeys);
+  const limitOrderTrades = limitOrders
+    .filter((order) => limitOrderKeysSet.has(order.orderKey))
+    .flatMap((order) => order.trades);
+  console.log({ limitOrders, limitOrderKeysSet, limitOrderTrades });
+  return limitOrderTrades.map((trade) => ({
+    kind: "trade",
+    date: new Date(trade.confirmedAt),
+    inputMint: trade.inputMint,
+    outputMint: trade.outputMint,
+    inputAmount: {
+      amount: trade.inputAmount,
+      adjustedForDecimals: true,
+    },
+    outputAmount: {
+      amount: trade.outputAmount,
+      adjustedForDecimals: true,
+    },
+    fee: {
+      amount: trade.feeAmount,
+      adjustedForDecimals: true,
+    },
+    tradeGroupType: "limit order",
+    tradeGroupKey: trade.orderKey,
+    userAddress,
+    transactionSignature: trade.txId,
+  }));
+}
+
 async function getDeposits(
   userAddress: Address,
   dcaKeys: Set<Address>,
   valueAverageKeys: Set<Address>,
+  limitOrderKeys: Set<Address>,
 ): Promise<Deposit[]> {
-  const [closedDCAs, openDCAs, closedValueAverages, openValueAverages] =
-    await Promise.all([
-      dcaKeys.size > 0 ? getClosedDCAs(userAddress) : [],
-      dcaKeys.size > 0 ? getOpenDCAs(userAddress) : [],
-      valueAverageKeys.size > 0 ? getClosedValueAverages(userAddress) : [],
-      valueAverageKeys.size > 0 ? getOpenValueAverages(userAddress) : [],
-    ]);
+  const [
+    closedDCAs,
+    openDCAs,
+    closedValueAverages,
+    openValueAverages,
+    limitOrdersWithTrades,
+  ] = await Promise.all([
+    dcaKeys.size > 0 ? getClosedDCAs(userAddress) : [],
+    dcaKeys.size > 0 ? getOpenDCAs(userAddress) : [],
+    valueAverageKeys.size > 0 ? getClosedValueAverages(userAddress) : [],
+    valueAverageKeys.size > 0 ? getOpenValueAverages(userAddress) : [],
+    limitOrderKeys.size > 0 ? getLimitOrdersWithTrades(userAddress) : [],
+  ]);
 
   const dcas = [...closedDCAs, ...openDCAs].filter((dca) =>
     dcaKeys.has(dca.dcaKey),
@@ -127,12 +192,18 @@ async function getDeposits(
   const valueAverages = [...closedValueAverages, ...openValueAverages].filter(
     (va) => valueAverageKeys.has(va.valueAverageKey),
   );
+  const limitOrders = limitOrdersWithTrades.filter((order) =>
+    limitOrderKeys.has(order.orderKey),
+  );
 
   const dcaDeposits: Deposit[] = dcas.map((dca) => ({
     kind: "deposit",
     date: new Date(dca.createdAt),
     inputMint: dca.inputMint,
-    inputAmount: dca.inDeposited,
+    inputAmount: {
+      amount: dca.inDeposited,
+      adjustedForDecimals: false,
+    },
     tradeGroupType: "dca",
     tradeGroupKey: dca.dcaKey,
     userAddress: userAddress,
@@ -143,14 +214,31 @@ async function getDeposits(
     kind: "deposit",
     date: new Date(va.createdAt),
     inputMint: va.inputMint,
-    inputAmount: va.inDeposited,
+    inputAmount: {
+      amount: va.inDeposited,
+      adjustedForDecimals: false,
+    },
     tradeGroupType: "value average",
     tradeGroupKey: va.valueAverageKey,
     userAddress: userAddress,
     transactionSignature: va.openTxHash,
   }));
 
-  return [...dcaDeposits, ...valueAverageDeposits];
+  const limitOrderDeposits: Deposit[] = limitOrders.map((order) => ({
+    kind: "deposit",
+    date: new Date(order.createdAt),
+    inputMint: order.inputMint,
+    inputAmount: {
+      amount: order.makingAmount,
+      adjustedForDecimals: true,
+    },
+    tradeGroupType: "limit order",
+    tradeGroupKey: order.orderKey,
+    userAddress: userAddress,
+    transactionSignature: order.openTx,
+  }));
+
+  return [...dcaDeposits, ...valueAverageDeposits, ...limitOrderDeposits];
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -160,16 +248,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const valueAverageKeys = [
     ...new Set(url.searchParams.getAll("va")),
   ] as Address[];
+  const limitOrderKeys = [
+    ...new Set(url.searchParams.getAll("lo")),
+  ] as Address[];
 
-  const [dcaTrades, valueAverageTrades, deposits] = await Promise.all([
-    dcaKeys.length > 0 ? getDCAFills(dcaKeys) : [],
-    valueAverageKeys.length > 0 ? getValueAverageFills(valueAverageKeys) : [],
-    dcaKeys.length > 0 || valueAverageKeys.length > 0
-      ? getDeposits(userAddress, new Set(dcaKeys), new Set(valueAverageKeys))
-      : [],
-  ]);
+  const [dcaTrades, valueAverageTrades, limitOrderTrades, deposits] =
+    await Promise.all([
+      dcaKeys.length > 0 ? getDCAFills(dcaKeys) : [],
+      valueAverageKeys.length > 0 ? getValueAverageFills(valueAverageKeys) : [],
+      limitOrderKeys.length > 0
+        ? getLimitOrderTrades(userAddress, limitOrderKeys)
+        : [],
+      dcaKeys.length > 0 ||
+      valueAverageKeys.length > 0 ||
+      limitOrderKeys.length > 0
+        ? getDeposits(
+            userAddress,
+            new Set(dcaKeys),
+            new Set(valueAverageKeys),
+            new Set(limitOrderKeys),
+          )
+        : [],
+    ]);
 
-  const allTrades = [...dcaTrades, ...valueAverageTrades]; //.sort((a, b) => a.confirmedAt.getTime() - b.confirmedAt.getTime());
+  const allTrades = [...dcaTrades, ...valueAverageTrades, ...limitOrderTrades];
 
   const uniqueMintAddresses: Address[] = Array.from(
     new Set<Address>(
@@ -185,6 +287,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return {
     dcaKeys,
     valueAverageKeys,
+    limitOrderKeys,
     userAddress,
     events,
     mints,
@@ -300,7 +403,10 @@ function DottedAnchorLink({ href, children }: DottedAnchorLinkProps) {
 
 type TokenAmountCellProps = {
   address: Address;
-  amountRaw: StringifiedNumber;
+  amountToDisplay: {
+    amount: StringifiedNumber;
+    adjustedForDecimals: boolean;
+  };
   tokenMintData: MintData | undefined;
   isDeposit: boolean;
   onNumberClick?: () => void;
@@ -308,7 +414,7 @@ type TokenAmountCellProps = {
 
 function TokenAmountCell({
   address,
-  amountRaw,
+  amountToDisplay,
   tokenMintData,
   isDeposit,
   onNumberClick,
@@ -321,7 +427,10 @@ function TokenAmountCell({
     );
   }
 
-  const formattedAmount = numberDisplay(amountRaw, tokenMintData.decimals);
+  const { amount, adjustedForDecimals } = amountToDisplay;
+  const formattedAmount = adjustedForDecimals
+    ? numberDisplayAlreadyAdjustedForDecimals(amount)
+    : numberDisplay(amount, tokenMintData.decimals);
 
   return (
     <Flex gap="micro" direction="row" align="center">
@@ -360,38 +469,39 @@ function TokenAmountCell({
   );
 }
 
+type AmountToDisplay = {
+  amount: StringifiedNumber;
+  adjustedForDecimals: boolean;
+};
+
 enum RateType {
   INPUT_PER_OUTPUT,
   OUTPUT_PER_INPUT,
 }
 
-type RateCellProps = {
-  inputAmountRaw: StringifiedNumber;
-  outputAmountRaw: StringifiedNumber;
-  inputMintData: MintData | undefined;
-  outputMintData: MintData | undefined;
-  rateType: RateType;
-  onNumberClick: () => void;
-};
+function getRates(
+  inputAmountToDisplay: AmountToDisplay,
+  outputAmountToDisplay: AmountToDisplay,
+  inputMintData: MintData,
+  outputMintData: MintData,
+): {
+  rateInputOverOutput: BigDecimal;
+  rateOutputOverInput: BigDecimal;
+} {
+  const { amount: inputAmount, adjustedForDecimals: inputAdjustedForDecimals } =
+    inputAmountToDisplay;
 
-function RateCell({
-  inputAmountRaw,
-  outputAmountRaw,
-  inputMintData,
-  outputMintData,
-  rateType,
-  onNumberClick,
-}: RateCellProps) {
-  if (!inputMintData || !outputMintData) {
-    return <Text>Unknown</Text>;
-  }
+  const {
+    amount: outputAmount,
+    adjustedForDecimals: outputAdjustedForDecimals,
+  } = outputAmountToDisplay;
 
-  const inputAmountBigDecimal = new BigDecimal(
-    `${inputAmountRaw}E-${inputMintData.decimals}`,
-  );
-  const outputAmountBigDecimal = new BigDecimal(
-    `${outputAmountRaw}E-${outputMintData.decimals}`,
-  );
+  const inputAmountBigDecimal = inputAdjustedForDecimals
+    ? new BigDecimal(inputAmount)
+    : new BigDecimal(`${inputAmount}E-${inputMintData.decimals}`);
+  const outputAmountBigDecimal = outputAdjustedForDecimals
+    ? new BigDecimal(outputAmount)
+    : new BigDecimal(`${outputAmount}E-${outputMintData.decimals}`);
 
   const rateInputOverOutput = inputAmountBigDecimal.divide(
     outputAmountBigDecimal,
@@ -402,10 +512,60 @@ function RateCell({
     outputMintData.decimals,
   );
 
-  const text =
-    rateType === RateType.INPUT_PER_OUTPUT
+  return {
+    rateInputOverOutput,
+    rateOutputOverInput,
+  };
+}
+
+type RateCellProps = {
+  inputAmountToDisplay: AmountToDisplay;
+  outputAmountToDisplay: AmountToDisplay;
+  inputMintData: MintData | undefined;
+  outputMintData: MintData | undefined;
+  rateType: RateType;
+  onNumberClick: () => void;
+};
+
+function RateCell({
+  inputAmountToDisplay,
+  outputAmountToDisplay,
+  inputMintData,
+  outputMintData,
+  rateType,
+  onNumberClick,
+}: RateCellProps) {
+  if (!inputMintData || !outputMintData) {
+    return <Text>Unknown</Text>;
+  }
+
+  const { rateInputOverOutput, rateOutputOverInput } = useMemo(
+    () =>
+      getRates(
+        inputAmountToDisplay,
+        outputAmountToDisplay,
+        inputMintData,
+        outputMintData,
+      ),
+    [
+      inputAmountToDisplay,
+      outputAmountToDisplay,
+      inputMintData,
+      outputMintData,
+    ],
+  );
+
+  const text = useMemo(() => {
+    return rateType === RateType.INPUT_PER_OUTPUT
       ? `${rateInputOverOutput.getPrettyValue()} ${inputMintData.symbol} per ${outputMintData.symbol}`
       : `${rateOutputOverInput.getPrettyValue()} ${outputMintData.symbol} per ${inputMintData.symbol}`;
+  }, [
+    rateInputOverOutput,
+    rateOutputOverInput,
+    inputMintData,
+    outputMintData,
+    rateType,
+  ]);
 
   return <Text onClick={onNumberClick}>{text}</Text>;
 }
@@ -433,7 +593,7 @@ function TransactionKindCell({ kind }: { kind: "deposit" | "trade" }) {
 function TransactionProductCell({
   tradeGroupType,
 }: {
-  tradeGroupType: "dca" | "value average";
+  tradeGroupType: "dca" | "value average" | "limit order";
 }) {
   if (tradeGroupType === "dca") {
     return (
@@ -442,9 +602,18 @@ function TransactionProductCell({
       </Badge>
     );
   }
+
+  if (tradeGroupType === "value average") {
+    return (
+      <Badge size="xs" variant="light" c="blue.1">
+        VA
+      </Badge>
+    );
+  }
+
   return (
-    <Badge size="xs" variant="light" c="blue.1">
-      VA
+    <Badge size="xs" variant="light" c="orange.1">
+      LO
     </Badge>
   );
 }
@@ -453,12 +622,14 @@ type ChangeDisplayedTradesButtonProps = {
   userAddress: Address;
   dcaKeys: Address[];
   valueAverageKeys: Address[];
+  limitOrderKeys: Address[];
 };
 
 function ChangeDisplayedTradesButton({
   userAddress,
   dcaKeys,
   valueAverageKeys,
+  limitOrderKeys,
 }: ChangeDisplayedTradesButtonProps) {
   const navigation = useNavigation();
   const isLoading = navigation.state === "loading";
@@ -471,6 +642,9 @@ function ChangeDisplayedTradesButton({
       {valueAverageKeys.map((vaKey) => (
         <input key={vaKey} type="hidden" name="va" value={vaKey} />
       ))}
+      {limitOrderKeys.map((loKey) => (
+        <input key={loKey} type="hidden" name="lo" value={loKey} />
+      ))}
 
       <Button
         type="submit"
@@ -482,6 +656,51 @@ function ChangeDisplayedTradesButton({
       </Button>
     </Form>
   );
+}
+
+function adjustOutputAmountForFee(
+  outputAmountToDisplay: AmountToDisplay,
+  feeToDisplay: AmountToDisplay,
+  subtractFee: boolean,
+): AmountToDisplay {
+  if (!subtractFee) {
+    return outputAmountToDisplay;
+  }
+
+  const {
+    amount: outputAmount,
+    adjustedForDecimals: outputAdjustedForDecimals,
+  } = outputAmountToDisplay;
+  const { amount: fee, adjustedForDecimals: feeAdjustedForDecimals } =
+    feeToDisplay;
+
+  if (outputAdjustedForDecimals !== feeAdjustedForDecimals) {
+    // For now assume that output and fee are either both or neither adjusted for decimals
+    throw new Error("Output and fee must have the same adjustedForDecimals");
+  }
+
+  if (outputAdjustedForDecimals) {
+    console.log({
+      outputAmount,
+      fee,
+      outputAmountDecimal: new BigDecimal(outputAmount).getValue(),
+      feeDecimal: new BigDecimal(fee).getValue(),
+    });
+
+    return {
+      amount: new BigDecimal(outputAmount)
+        .subtract(new BigDecimal(fee))
+        .getValue() as StringifiedNumber,
+      adjustedForDecimals: true,
+    };
+  } else {
+    return {
+      amount: (
+        BigInt(outputAmount) - BigInt(fee)
+      ).toString() as StringifiedNumber,
+      adjustedForDecimals: false,
+    };
+  }
 }
 
 type TradeRowProps = {
@@ -506,11 +725,10 @@ function TradeRow({
     (mint) => mint.address === trade.outputMint,
   );
 
-  const outputAmountWithFee: StringifiedNumber = subtractFee
-    ? ((
-        BigInt(trade.outputAmount) - BigInt(trade.fee)
-      ).toString() as StringifiedNumber)
-    : trade.outputAmount;
+  const outputAmountWithFee = useMemo(
+    () => adjustOutputAmountForFee(trade.outputAmount, trade.fee, subtractFee),
+    [trade.outputAmount, trade.fee, subtractFee],
+  );
 
   return (
     <Table.Tr key={trade.transactionSignature}>
@@ -523,7 +741,7 @@ function TradeRow({
       <Table.Td>
         <TokenAmountCell
           address={trade.inputMint}
-          amountRaw={trade.inputAmount}
+          amountToDisplay={trade.inputAmount}
           tokenMintData={inputMintData}
           isDeposit={false}
         />
@@ -531,7 +749,7 @@ function TradeRow({
       <Table.Td>
         <TokenAmountCell
           address={trade.outputMint}
-          amountRaw={outputAmountWithFee}
+          amountToDisplay={outputAmountWithFee}
           tokenMintData={outputMintData}
           isDeposit={false}
           onNumberClick={switchSubtractFee}
@@ -539,8 +757,8 @@ function TradeRow({
       </Table.Td>
       <Table.Td onClick={switchRateType}>
         <RateCell
-          inputAmountRaw={trade.inputAmount}
-          outputAmountRaw={trade.outputAmount}
+          inputAmountToDisplay={trade.inputAmount}
+          outputAmountToDisplay={trade.outputAmount}
           inputMintData={inputMintData}
           outputMintData={outputMintData}
           rateType={rateType}
@@ -578,7 +796,7 @@ function DepositRow({ deposit, mints }: DepositRowProps) {
       <Table.Td colSpan={3}>
         <TokenAmountCell
           address={deposit.inputMint}
-          amountRaw={deposit.inputAmount}
+          amountToDisplay={deposit.inputAmount}
           tokenMintData={inputMintData}
           isDeposit={true}
         />
@@ -593,9 +811,45 @@ function DepositRow({ deposit, mints }: DepositRowProps) {
   );
 }
 
+function TradeCountsTitle({
+  dcaKeysCount,
+  valueAverageKeysCount,
+  limitOrderKeysCount,
+  tradesCount,
+}: {
+  dcaKeysCount: number;
+  valueAverageKeysCount: number;
+  limitOrderKeysCount: number;
+  tradesCount: number;
+}) {
+  const counts = [
+    dcaKeysCount > 0 && `${dcaKeysCount} DCAs`,
+    valueAverageKeysCount > 0 && `${valueAverageKeysCount} VAs`,
+    limitOrderKeysCount > 0 && `${limitOrderKeysCount} LOs`,
+  ].filter(Boolean);
+
+  const countsDisplay = counts.reduce((acc, curr, i, arr) => {
+    if (i === 0) return curr;
+    if (i === arr.length - 1) return `${acc} and ${curr}`;
+    return `${acc}, ${curr}`;
+  }, "");
+
+  return (
+    <Title order={3}>
+      Displaying data for {countsDisplay} ({tradesCount} trades)
+    </Title>
+  );
+}
+
 export default function Fills() {
-  const { dcaKeys, valueAverageKeys, userAddress, events, mints } =
-    useLoaderData() as Awaited<ReturnType<typeof loader>>;
+  const {
+    dcaKeys,
+    valueAverageKeys,
+    limitOrderKeys,
+    userAddress,
+    events,
+    mints,
+  } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
 
   const [rateType, setRateType] = useState<RateType>(RateType.OUTPUT_PER_INPUT);
   const switchRateType = useCallback(() => {
@@ -608,8 +862,24 @@ export default function Fills() {
 
   const [subtractFee, setSubtractFee] = useState(false);
 
-  if (dcaKeys.length === 0 && valueAverageKeys.length === 0) {
-    return <Text>No DCAs or VAs selected</Text>;
+  if (
+    dcaKeys.length === 0 &&
+    valueAverageKeys.length === 0 &&
+    limitOrderKeys.length === 0
+  ) {
+    return (
+      <Stack gap="md">
+        <Group>
+          <ChangeDisplayedTradesButton
+            userAddress={userAddress}
+            dcaKeys={dcaKeys}
+            valueAverageKeys={valueAverageKeys}
+            limitOrderKeys={limitOrderKeys}
+          />
+          <Title order={3}>No trades selected</Title>
+        </Group>
+      </Stack>
+    );
   }
 
   const trades = events.filter((event) => event.kind === "trade") as Trade[];
@@ -623,11 +893,14 @@ export default function Fills() {
           userAddress={userAddress}
           dcaKeys={dcaKeys}
           valueAverageKeys={valueAverageKeys}
+          limitOrderKeys={limitOrderKeys}
         />
-        <Title order={3}>
-          Displaying data for {dcaKeys.length} DCAs and{" "}
-          {valueAverageKeys.length} VAs ({trades.length} trades)
-        </Title>
+        <TradeCountsTitle
+          dcaKeysCount={dcaKeys.length}
+          valueAverageKeysCount={valueAverageKeys.length}
+          limitOrderKeysCount={limitOrderKeys.length}
+          tradesCount={trades.length}
+        />
         <DownloadButton
           events={events}
           mints={mints}
@@ -635,7 +908,7 @@ export default function Fills() {
         />
       </Group>
 
-      <Table horizontalSpacing="lg">
+      <Table stickyHeader horizontalSpacing="lg">
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Kind</Table.Th>

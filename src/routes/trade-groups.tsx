@@ -27,7 +27,10 @@ import {
   ValueAverageStatus,
 } from "../types";
 import { useListState } from "@mantine/hooks";
-import { numberDisplay } from "../number-display";
+import {
+  numberDisplay,
+  numberDisplayAlreadyAdjustedForDecimals,
+} from "../number-display";
 import { getMintData } from "../mint-data";
 import { IconArrowLeft } from "@tabler/icons-react";
 import {
@@ -128,7 +131,7 @@ function getInputAmountWithSymbol(
   // limit order
   if (inputMintData) {
     // makingAmount is already adjusted for decimals, but is not optimal for display to users
-    return `${numberDisplay(account.makingAmount, 0)} ${inputMintData.symbol}`;
+    return `${numberDisplayAlreadyAdjustedForDecimals(account.makingAmount)} ${inputMintData.symbol}`;
   }
   return `${account.makingAmount} (Unknown (${account.inputMint}))`;
 }
