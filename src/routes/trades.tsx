@@ -21,6 +21,7 @@ import {
   ActionIcon,
   Anchor,
   Badge,
+  Box,
   Button,
   CopyButton,
   Flex,
@@ -54,6 +55,7 @@ import {
   getOpenValueAverages,
 } from "../jupiter-api";
 import { getClosedDCAs } from "../jupiter-api";
+import { toSvg } from "jdenticon";
 
 async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
   const responses = await Promise.all(
@@ -143,7 +145,7 @@ async function getLimitOrderTrades(
   const limitOrderTrades = limitOrders
     .filter((order) => limitOrderKeysSet.has(order.orderKey))
     .flatMap((order) => order.trades);
-  console.log({ limitOrders, limitOrderKeysSet, limitOrderTrades });
+
   return limitOrderTrades.map((trade) => ({
     kind: "trade",
     date: new Date(trade.confirmedAt),
@@ -572,8 +574,12 @@ function TransactionLinkCell({ txId }: { txId: string }) {
   return <DottedAnchorLink href={explorerLink}>View</DottedAnchorLink>;
 }
 
-function TransactionKindCell({ kind }: { kind: "deposit" | "trade" }) {
-  if (kind === "deposit") {
+function TransactionEventTypeBadge({
+  eventType,
+}: {
+  eventType: "deposit" | "trade";
+}) {
+  if (eventType === "deposit") {
     return (
       <Badge size="xs" variant="default" c="green.1">
         Deposit
@@ -587,7 +593,7 @@ function TransactionKindCell({ kind }: { kind: "deposit" | "trade" }) {
   );
 }
 
-function TransactionProductCell({
+function TransactionStrategyBadge({
   strategyType,
 }: {
   strategyType: StrategyType;
@@ -612,6 +618,32 @@ function TransactionProductCell({
     <Badge size="xs" variant="light" c="orange.1">
       LO
     </Badge>
+  );
+}
+
+function StrategyKeyIcon({ strategyKey }: { strategyKey: Address }) {
+  const size = 24;
+  const svg = useMemo(() => toSvg(strategyKey, size), [strategyKey, size]);
+  return <Box w={size} h={size} dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
+type TransactionEventCellProps = {
+  eventType: "deposit" | "trade";
+  strategyType: StrategyType;
+  strategyKey: Address;
+};
+
+function TransactionEventCell({
+  eventType,
+  strategyType,
+  strategyKey,
+}: TransactionEventCellProps) {
+  return (
+    <Group maw={150} justify="space-between">
+      <TransactionEventTypeBadge eventType={eventType} />
+      <TransactionStrategyBadge strategyType={strategyType} />
+      <StrategyKeyIcon strategyKey={strategyKey} />
+    </Group>
   );
 }
 
@@ -677,13 +709,6 @@ function adjustOutputAmountForFee(
   }
 
   if (outputAdjustedForDecimals) {
-    console.log({
-      outputAmount,
-      fee,
-      outputAmountDecimal: new BigDecimal(outputAmount).getValue(),
-      feeDecimal: new BigDecimal(fee).getValue(),
-    });
-
     return {
       amount: new BigDecimal(outputAmount)
         .subtract(new BigDecimal(fee))
@@ -729,8 +754,12 @@ function TradeRow({
 
   return (
     <Table.Tr key={trade.transactionSignature}>
-      <Table.Td miw={100}>
-        <TransactionKindCell kind="trade" />
+      <Table.Td>
+        <TransactionEventCell
+          eventType="trade"
+          strategyType={trade.strategyType}
+          strategyKey={trade.strategyKey}
+        />
       </Table.Td>
       <Table.Td>
         <DateCell date={trade.date} />
@@ -765,9 +794,6 @@ function TradeRow({
       <Table.Td>
         <TransactionLinkCell txId={trade.transactionSignature} />
       </Table.Td>
-      <Table.Td>
-        <TransactionProductCell strategyType={trade.strategyType} />
-      </Table.Td>
     </Table.Tr>
   );
 }
@@ -785,7 +811,11 @@ function DepositRow({ deposit, mints }: DepositRowProps) {
   return (
     <Table.Tr key={deposit.transactionSignature}>
       <Table.Td>
-        <TransactionKindCell kind="deposit" />
+        <TransactionEventCell
+          eventType="deposit"
+          strategyType={deposit.strategyType}
+          strategyKey={deposit.strategyKey}
+        />
       </Table.Td>
       <Table.Td>
         <DateCell date={deposit.date} />
@@ -800,9 +830,6 @@ function DepositRow({ deposit, mints }: DepositRowProps) {
       </Table.Td>
       <Table.Td>
         <TransactionLinkCell txId={deposit.transactionSignature} />
-      </Table.Td>
-      <Table.Td>
-        <TransactionProductCell strategyType={deposit.strategyType} />
       </Table.Td>
     </Table.Tr>
   );
@@ -881,8 +908,6 @@ export default function Fills() {
 
   const trades = events.filter((event) => event.kind === "trade") as Trade[];
 
-  console.log({ events });
-
   return (
     <Stack gap="md">
       <Group justify="space-between">
@@ -908,7 +933,7 @@ export default function Fills() {
       <Table stickyHeader horizontalSpacing="lg">
         <Table.Thead>
           <Table.Tr>
-            <Table.Th>Kind</Table.Th>
+            <Table.Th>Event</Table.Th>
             <Table.Th>Date</Table.Th>
             <Table.Th>Swapped</Table.Th>
             <Table.Th>
@@ -951,7 +976,6 @@ export default function Fills() {
               </Group>
             </Table.Th>
             <Table.Th>Transaction</Table.Th>
-            <Table.Th>Product</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>

@@ -15,6 +15,7 @@
     "@solana/web3.js": "^2.0.0-rc.1",
     "@tabler/icons-react": "^3.19.0",
     "@tanstack/react-query": "^5.61.0",
+    "jdenticon": "^3.3.0",
     "js-big-decimal": "^2.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.11.1",
+    "@tanstack/react-query-devtools": "^5.61.0",
     "@types/react": "^18.3.10",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
@@ -29,7 +31,6 @@
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.12",
-    "@tanstack/react-query-devtools": "^5.61.0",
     "globals": "^15.9.0",
     "postcss": "^8.4.47",
     "postcss-preset-mantine": "^1.17.0",
