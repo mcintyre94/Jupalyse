@@ -3,15 +3,15 @@ import * as ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Root from "./routes/root";
 import HomeRoute, { action as HomeAction } from "./routes/home";
-import TradeGroupsRoute, {
-  loader as TradeGroupsLoader,
-} from "./routes/trade-groups";
+import StrategiesRoute, {
+  loader as StrategiesLoader,
+} from "./routes/strategies";
 import TradesRoute, { loader as TradesLoader } from "./routes/trades";
 import { action as TradesCsvAction } from "./routes/trades-csv";
 import { createTheme, MantineProvider } from "@mantine/core";
 
 import "@mantine/core/styles.css";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { queryClient } from "./query-client";
 const router = createBrowserRouter([
@@ -25,9 +25,9 @@ const router = createBrowserRouter([
         action: HomeAction,
       },
       {
-        path: "/trade-groups/:address",
-        element: <TradeGroupsRoute />,
-        loader: TradeGroupsLoader,
+        path: "/strategies/:address",
+        element: <StrategiesRoute />,
+        loader: StrategiesLoader,
       },
       {
         path: "/trades",

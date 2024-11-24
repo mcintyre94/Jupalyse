@@ -632,7 +632,7 @@ function ChangeDisplayedTradesButton({
   const isLoading = navigation.state === "loading";
 
   return (
-    <Form action={`/trade-groups/${userAddress}`}>
+    <Form action={`/strategies/${userAddress}`}>
       {dcaKeys.map((dcaKey) => (
         <input key={dcaKey} type="hidden" name="dca" value={dcaKey} />
       ))}

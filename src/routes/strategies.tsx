@@ -490,7 +490,7 @@ function ChangeAddressButton() {
   );
 }
 
-export default function TradeGroups() {
+export default function Strategies() {
   const params = useParams();
   const address = params.address as string;
   assertIsAddress(address);
@@ -568,7 +568,7 @@ export default function TradeGroups() {
                       accounts: dcas,
                       type: "dca",
                     }}
-                    // Note: we pass allSelectedKeys so that if any trades in any groups are pre-selected, we only select them
+                    // Note: we pass allSelectedKeys so that if any trades in any strategies are pre-selected, we only select them
                     selectedKeys={allSelectedKeys}
                     mints={mints}
                   />
