@@ -134,14 +134,16 @@ export type LimitOrderOrdersResponse = {
   page: number;
 };
 
+export type AmountToDisplay = {
+  amount: StringifiedNumber;
+  adjustedForDecimals: boolean;
+};
+
 export type Deposit = {
   kind: "deposit";
   date: Date;
   inputMint: Address;
-  inputAmount: {
-    amount: StringifiedNumber;
-    adjustedForDecimals: boolean;
-  };
+  inputAmount: AmountToDisplay;
   tradeGroupType: "dca" | "value average" | "limit order";
   tradeGroupKey: Address;
   userAddress: Address;
@@ -153,18 +155,9 @@ export type Trade = {
   date: Date;
   inputMint: Address;
   outputMint: Address;
-  inputAmount: {
-    amount: StringifiedNumber;
-    adjustedForDecimals: boolean;
-  };
-  outputAmount: {
-    amount: StringifiedNumber;
-    adjustedForDecimals: boolean;
-  };
-  fee: {
-    amount: StringifiedNumber;
-    adjustedForDecimals: boolean;
-  };
+  inputAmount: AmountToDisplay;
+  outputAmount: AmountToDisplay;
+  fee: AmountToDisplay;
   tradeGroupType: "dca" | "value average" | "limit order";
   tradeGroupKey: Address;
   userAddress: Address;

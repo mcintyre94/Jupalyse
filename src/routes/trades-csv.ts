@@ -1,7 +1,10 @@
 import { ActionFunctionArgs } from "react-router-dom";
-import { Trade, MintData, Deposit } from "../types";
+import { Trade, MintData, Deposit, AmountToDisplay } from "../types";
 import { Address, Signature, StringifiedNumber } from "@solana/web3.js";
-import { numberDisplay } from "../number-display";
+import {
+  numberDisplay,
+  numberDisplayAlreadyAdjustedForDecimals,
+} from "../number-display";
 import BigDecimal from "js-big-decimal";
 
 type InputData = {
@@ -23,7 +26,7 @@ type CSVTradeDataRow = {
   outAmountFee: StringifiedNumber;
   outAmountNet: StringifiedNumber;
   transactionSignature: Signature;
-  tradeGroupType: "DCA" | "VA";
+  tradeGroupType: "DCA" | "VA" | "LO";
   tradeGroupKey: Address;
 };
 
@@ -35,7 +38,7 @@ type CSVDepositDataRow = {
   inTokenSymbol: string;
   inAmount: StringifiedNumber;
   transactionSignature: Signature;
-  tradeGroupType: "DCA" | "VA";
+  tradeGroupType: "DCA" | "VA" | "LO";
   tradeGroupKey: Address;
 };
 
@@ -100,26 +103,56 @@ export function convertToCSV(
   return csvRows.join("\n");
 }
 
+function getAmountFormatted(
+  amountToDisplay: AmountToDisplay,
+  decimals: number,
+): string {
+  return amountToDisplay.adjustedForDecimals
+    ? numberDisplayAlreadyAdjustedForDecimals(amountToDisplay.amount)
+    : numberDisplay(amountToDisplay.amount, decimals);
+}
+
+function getAmountBigDecimal(
+  amountToDisplay: AmountToDisplay,
+  decimals: number,
+): BigDecimal {
+  return amountToDisplay.adjustedForDecimals
+    ? new BigDecimal(amountToDisplay.amount)
+    : new BigDecimal(`${amountToDisplay.amount}E-${decimals}`);
+}
+
+function getTradeGroupType(
+  tradeGroupType: Trade["tradeGroupType"],
+): "DCA" | "VA" | "LO" {
+  if (tradeGroupType === "dca") return "DCA";
+  if (tradeGroupType === "value average") return "VA";
+  if (tradeGroupType === "limit order") return "LO";
+  throw new Error(`Unknown trade group type: ${tradeGroupType}`);
+}
+
 function csvDataForTrade(trade: Trade, mints: MintData[]): CSVTradeDataRow {
   const inputMintData = mints.find((mint) => mint.address === trade.inputMint);
   const outputMintData = mints.find(
     (mint) => mint.address === trade.outputMint,
   );
   const inputAmountFormatted = inputMintData
-    ? numberDisplay(trade.inputAmount, inputMintData.decimals)
+    ? getAmountFormatted(trade.inputAmount, inputMintData.decimals)
     : "";
 
   let outputAmountFormatted = "";
   let outputAmountFeeFormatted = "";
   let outputAmountNetFormatted = "";
 
-  if (outputMintData) {
-    const outputAmountBigDecimal = new BigDecimal(
-      `${trade.outputAmount}E-${outputMintData.decimals}`,
+  if (outputMintData || trade.outputAmount.adjustedForDecimals) {
+    const decimals = outputMintData?.decimals ?? 0;
+
+    const outputAmountBigDecimal = getAmountBigDecimal(
+      trade.outputAmount,
+      decimals,
     );
-    const outputFeeBigDecimal = new BigDecimal(
-      `${trade.fee}E-${outputMintData.decimals}`,
-    );
+
+    const outputFeeBigDecimal = getAmountBigDecimal(trade.fee, decimals);
+
     const outputAmountNetBigDecimal =
       outputAmountBigDecimal.subtract(outputFeeBigDecimal);
 
@@ -145,7 +178,7 @@ function csvDataForTrade(trade: Trade, mints: MintData[]): CSVTradeDataRow {
     outAmountFee: outputAmountFeeFormatted as StringifiedNumber,
     outAmountNet: outputAmountNetFormatted as StringifiedNumber,
     transactionSignature: trade.transactionSignature,
-    tradeGroupType: trade.tradeGroupType === "dca" ? "DCA" : "VA",
+    tradeGroupType: getTradeGroupType(trade.tradeGroupType),
     tradeGroupKey: trade.tradeGroupKey,
   };
 }
@@ -158,7 +191,7 @@ function csvDataForDeposit(
     (mint) => mint.address === deposit.inputMint,
   );
   const inputAmountFormatted = inputMintData
-    ? numberDisplay(deposit.inputAmount, inputMintData.decimals)
+    ? getAmountFormatted(deposit.inputAmount, inputMintData.decimals)
     : "";
 
   return {
@@ -169,7 +202,7 @@ function csvDataForDeposit(
     inTokenSymbol: inputMintData?.symbol ?? "",
     inAmount: inputAmountFormatted as StringifiedNumber,
     transactionSignature: deposit.transactionSignature,
-    tradeGroupType: deposit.tradeGroupType === "dca" ? "DCA" : "VA",
+    tradeGroupType: getTradeGroupType(deposit.tradeGroupType),
     tradeGroupKey: deposit.tradeGroupKey,
   };
 }

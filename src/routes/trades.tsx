@@ -6,6 +6,7 @@ import {
   useNavigation,
 } from "react-router-dom";
 import {
+  AmountToDisplay,
   Deposit,
   FetchDCAFillsResponse,
   FetchValueAverageFillsResponse,
@@ -468,11 +469,6 @@ function TokenAmountCell({
     </Flex>
   );
 }
-
-type AmountToDisplay = {
-  amount: StringifiedNumber;
-  adjustedForDecimals: boolean;
-};
 
 enum RateType {
   INPUT_PER_OUTPUT,
