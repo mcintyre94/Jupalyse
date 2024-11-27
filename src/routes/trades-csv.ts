@@ -1,13 +1,24 @@
 import { ActionFunctionArgs } from "react-router-dom";
-import { Trade, MintData, Deposit } from "../types";
+import {
+  Trade,
+  MintData,
+  Deposit,
+  AmountToDisplay,
+  StrategyType,
+} from "../types";
 import { Address, Signature, StringifiedNumber } from "@solana/web3.js";
-import { numberDisplay } from "../number-display";
+import {
+  numberDisplay,
+  numberDisplayAlreadyAdjustedForDecimals,
+} from "../number-display";
 import BigDecimal from "js-big-decimal";
 
 type InputData = {
   events: (Deposit | Trade)[];
   mints: MintData[];
 };
+
+type ShortStrategyType = "DCA" | "VA" | "LO";
 
 type CSVTradeDataRow = {
   kind: "trade";
@@ -23,8 +34,8 @@ type CSVTradeDataRow = {
   outAmountFee: StringifiedNumber;
   outAmountNet: StringifiedNumber;
   transactionSignature: Signature;
-  tradeGroupType: "DCA" | "VA";
-  tradeGroupKey: Address;
+  strategyType: ShortStrategyType;
+  strategyKey: Address;
 };
 
 type CSVDepositDataRow = {
@@ -35,8 +46,8 @@ type CSVDepositDataRow = {
   inTokenSymbol: string;
   inAmount: StringifiedNumber;
   transactionSignature: Signature;
-  tradeGroupType: "DCA" | "VA";
-  tradeGroupKey: Address;
+  strategyType: ShortStrategyType;
+  strategyKey: Address;
 };
 
 export function convertToCSV(
@@ -59,8 +70,8 @@ export function convertToCSV(
     "outAmountFee",
     "outAmountNet",
     "transactionSignature",
-    "tradeGroupType",
-    "tradeGroupKey",
+    "strategyType",
+    "strategyKey",
   ];
   const headerNames = [
     "Kind",
@@ -76,8 +87,8 @@ export function convertToCSV(
     "Out Amount (fee)",
     "Out Amount (net)",
     "Transaction Signature",
-    "Trade Group Type",
-    "Trade Group Key",
+    "Strategy Type",
+    "Strategy Key",
   ];
   const csvRows = [headerNames.join(",")];
 
@@ -100,26 +111,54 @@ export function convertToCSV(
   return csvRows.join("\n");
 }
 
+function getAmountFormatted(
+  amountToDisplay: AmountToDisplay,
+  decimals: number,
+): string {
+  return amountToDisplay.adjustedForDecimals
+    ? numberDisplayAlreadyAdjustedForDecimals(amountToDisplay.amount)
+    : numberDisplay(amountToDisplay.amount, decimals);
+}
+
+function getAmountBigDecimal(
+  amountToDisplay: AmountToDisplay,
+  decimals: number,
+): BigDecimal {
+  return amountToDisplay.adjustedForDecimals
+    ? new BigDecimal(amountToDisplay.amount)
+    : new BigDecimal(`${amountToDisplay.amount}E-${decimals}`);
+}
+
+function getShortStrategyType(strategyType: StrategyType): ShortStrategyType {
+  if (strategyType === "dca") return "DCA";
+  if (strategyType === "value average") return "VA";
+  if (strategyType === "limit order") return "LO";
+  throw new Error(`Unknown strategy type: ${strategyType}`);
+}
+
 function csvDataForTrade(trade: Trade, mints: MintData[]): CSVTradeDataRow {
   const inputMintData = mints.find((mint) => mint.address === trade.inputMint);
   const outputMintData = mints.find(
     (mint) => mint.address === trade.outputMint,
   );
   const inputAmountFormatted = inputMintData
-    ? numberDisplay(trade.inputAmount, inputMintData.decimals)
+    ? getAmountFormatted(trade.inputAmount, inputMintData.decimals)
     : "";
 
   let outputAmountFormatted = "";
   let outputAmountFeeFormatted = "";
   let outputAmountNetFormatted = "";
 
-  if (outputMintData) {
-    const outputAmountBigDecimal = new BigDecimal(
-      `${trade.outputAmount}E-${outputMintData.decimals}`,
+  if (outputMintData || trade.outputAmount.adjustedForDecimals) {
+    const decimals = outputMintData?.decimals ?? 0;
+
+    const outputAmountBigDecimal = getAmountBigDecimal(
+      trade.outputAmount,
+      decimals,
     );
-    const outputFeeBigDecimal = new BigDecimal(
-      `${trade.fee}E-${outputMintData.decimals}`,
-    );
+
+    const outputFeeBigDecimal = getAmountBigDecimal(trade.fee, decimals);
+
     const outputAmountNetBigDecimal =
       outputAmountBigDecimal.subtract(outputFeeBigDecimal);
 
@@ -145,8 +184,8 @@ function csvDataForTrade(trade: Trade, mints: MintData[]): CSVTradeDataRow {
     outAmountFee: outputAmountFeeFormatted as StringifiedNumber,
     outAmountNet: outputAmountNetFormatted as StringifiedNumber,
     transactionSignature: trade.transactionSignature,
-    tradeGroupType: trade.tradeGroupType === "dca" ? "DCA" : "VA",
-    tradeGroupKey: trade.tradeGroupKey,
+    strategyType: getShortStrategyType(trade.strategyType),
+    strategyKey: trade.strategyKey,
   };
 }
 
@@ -158,7 +197,7 @@ function csvDataForDeposit(
     (mint) => mint.address === deposit.inputMint,
   );
   const inputAmountFormatted = inputMintData
-    ? numberDisplay(deposit.inputAmount, inputMintData.decimals)
+    ? getAmountFormatted(deposit.inputAmount, inputMintData.decimals)
     : "";
 
   return {
@@ -169,8 +208,8 @@ function csvDataForDeposit(
     inTokenSymbol: inputMintData?.symbol ?? "",
     inAmount: inputAmountFormatted as StringifiedNumber,
     transactionSignature: deposit.transactionSignature,
-    tradeGroupType: deposit.tradeGroupType === "dca" ? "DCA" : "VA",
-    tradeGroupKey: deposit.tradeGroupKey,
+    strategyType: getShortStrategyType(deposit.strategyType),
+    strategyKey: deposit.strategyKey,
   };
 }
 
