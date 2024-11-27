@@ -55,7 +55,7 @@ export default function Home() {
           </Text>
 
           <Title ta="center" order={3}>
-            View and download your Jupiter DCA trades
+            View and download your Jupiter orders
           </Title>
         </Stack>
 
@@ -84,7 +84,7 @@ export default function Home() {
               disabled={validAddress !== true}
               loading={isLoading}
             >
-              Fetch DCAs
+              Fetch
             </Button>
           </Stack>
         </Form>

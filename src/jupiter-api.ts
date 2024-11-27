@@ -96,8 +96,7 @@ async function getLimitOrdersWithTradesImpl(address: Address) {
 
   while (hasMoreData) {
     const response = await fetch(
-      // TODO: Remove cors-anywhere - need CORS from Jupiter, or will need to host our own API
-      `https://cors-anywhere.herokuapp.com/https://api.jup.ag/limit/v2/orderHistory?wallet=${address}&page=${page}`,
+      `https://api.jup.ag/limit/v2/orderHistory?wallet=${address}&page=${page}`,
     );
     if (response.status >= 400) {
       throw new Error("Error fetching limit orders from Jupiter");
