@@ -27,16 +27,23 @@ export async function getMintData(addresses: Address[]) {
   if (missingMints.length > 0) {
     // use Jup token list to fetch missing mints
     // Jup has a low rate limit so use as fallback
-    const jupFallbackData = await Promise.all(
+    const jupFallbackDataResults = await Promise.allSettled(
       missingMints.map(async (address) => {
         const response = await fetch(`https://tokens.jup.ag/token/${address}`);
         // Jup returns the same structure
-        const mintData = (await response.json()) as MintData;
-        return mintData;
+        if (response.status === 200) {
+          const mintData = (await response.json()) as MintData;
+          return [mintData];
+        }
+        return [];
       }),
     );
 
-    return [...data.content, ...jupFallbackData];
+    const jupMintData = jupFallbackDataResults
+      .filter((result) => result.status === "fulfilled")
+      .flatMap((result) => result.value);
+
+    return [...data.content, ...jupMintData, ...jupMintData];
   }
 
   return data.content;
