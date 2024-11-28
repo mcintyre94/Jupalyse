@@ -43,7 +43,7 @@ export async function getMintData(addresses: Address[]) {
       .filter((result) => result.status === "fulfilled")
       .flatMap((result) => result.value);
 
-    return [...data.content, ...jupMintData, ...jupMintData];
+    return [...data.content, ...jupMintData];
   }
 
   return data.content;
