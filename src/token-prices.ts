@@ -3,7 +3,6 @@ import {
   Deposit,
   FetchedTokenPriceKey,
   FetchedTokenPrices,
-  StringifiedNumber,
   Timestamp,
   TokenPricesToFetch,
   Trade,

@@ -3,7 +3,6 @@ import {
   LoaderFunctionArgs,
   useFetcher,
   useLoaderData,
-  useNavigate,
   useNavigation,
 } from "react-router-dom";
 import {
@@ -78,9 +77,6 @@ import {
   getTokenPricesToFetch,
   roundTimestampToMinuteBoundary,
 } from "../token-prices";
-
-type AddressAndTimestampKey = `${Address}:${number}`;
-type HistoricTokenPrices = Map<AddressAndTimestampKey, AmountToDisplay>;
 
 async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
   const responses = await Promise.all(
@@ -1037,7 +1033,15 @@ function UsdValuesModal({
         />
         <Stack gap="md" align="flex-start">
           <TextInput
-            label="Your Birdeye API key"
+            label={
+              <Text>
+                Your{" "}
+                <DottedAnchorLink href="https://bds.birdeye.so/">
+                  Birdeye
+                </DottedAnchorLink>{" "}
+                API key
+              </Text>
+            }
             description="Only used to fetch token values. Never sent anywhere else"
             name="birdeyeApiKey"
             required
