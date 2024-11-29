@@ -165,3 +165,15 @@ export type Trade = {
   userAddress: Address;
   transactionSignature: Signature;
 };
+
+export type Timestamp = number;
+
+export type TokenPricesToFetch = {
+  [key: Address]: Timestamp[];
+};
+
+export type FetchedTokenPriceKey = `${Address}-${Timestamp}`;
+
+export type FetchedTokenPrices = {
+  [key in FetchedTokenPriceKey]: AmountToDisplay;
+};

@@ -9,10 +9,12 @@ import {
   AmountToDisplay,
   Deposit,
   FetchDCAFillsResponse,
+  FetchedTokenPrices,
   FetchValueAverageFillsResponse,
   MintData,
   StrategyType,
   StringifiedNumber,
+  TokenPricesToFetch,
   Trade,
 } from "../types";
 import { Address } from "@solana/web3.js";
@@ -27,11 +29,14 @@ import {
   Flex,
   Group,
   Image,
+  Input,
+  Modal,
   rem,
   Stack,
   Switch,
   Table,
   Text,
+  TextInput,
   Title,
   Tooltip,
 } from "@mantine/core";
@@ -47,7 +52,15 @@ import {
   numberDisplayAlreadyAdjustedForDecimals,
 } from "../number-display";
 import BigDecimal from "js-big-decimal";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Dispatch,
+  SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   getClosedValueAverages,
   getLimitOrdersWithTrades,
@@ -56,6 +69,11 @@ import {
 } from "../jupiter-api";
 import { getClosedDCAs } from "../jupiter-api";
 import { toSvg } from "jdenticon";
+import { useDisclosure } from "@mantine/hooks";
+import { getTokenPricesToFetch } from "../token-prices";
+
+type AddressAndTimestampKey = `${Address}:${number}`;
+type HistoricTokenPrices = Map<AddressAndTimestampKey, AmountToDisplay>;
 
 async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
   const responses = await Promise.all(
@@ -865,7 +883,54 @@ function TradeCountsTitle({
   );
 }
 
-export default function Fills() {
+function UsdValuesModal({
+  opened,
+  onClose,
+  setTokenPrices,
+  tokenPricesToFetch,
+}: {
+  opened: boolean;
+  onClose: () => void;
+  setTokenPrices: Dispatch<SetStateAction<FetchedTokenPrices | null>>;
+  tokenPricesToFetch: TokenPricesToFetch;
+}) {
+  const fetcher = useFetcher();
+
+  // Pass data back to parent after fetcher is done
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data) {
+      setTokenPrices(fetcher.data);
+      onClose();
+    }
+  }, [fetcher.state, fetcher.data, setTokenPrices, onClose]);
+
+  return (
+    <Modal opened={opened} onClose={onClose} title="Include USD values">
+      <fetcher.Form method="POST" action="/trades/fetch-usd-values">
+        <Input
+          type="hidden"
+          name="tokenPricesToFetch"
+          value={JSON.stringify(tokenPricesToFetch)}
+        />
+        <Stack gap="md" align="flex-start">
+          <TextInput
+            label="Your Birdeye API key"
+            description="Only used to fetch token values. Never sent anywhere else"
+            name="birdeyeApiKey"
+            required
+            autoComplete="off"
+          />
+
+          <Button size="md" type="submit" loading={fetcher.state !== "idle"}>
+            Fetch USD values
+          </Button>
+        </Stack>
+      </fetcher.Form>
+    </Modal>
+  );
+}
+
+export default function Trades() {
   const {
     dcaKeys,
     valueAverageKeys,
@@ -885,6 +950,20 @@ export default function Fills() {
   }, [rateType]);
 
   const [subtractFee, setSubtractFee] = useState(false);
+
+  const [
+    usdValuesModalOpened,
+    { open: openUsdValuesModal, close: closeUsdValuesModal },
+  ] = useDisclosure(false);
+
+  const tokenPricesToFetch = useMemo(
+    () => getTokenPricesToFetch(events),
+    [events],
+  );
+
+  const [tokenPrices, setTokenPrices] = useState<FetchedTokenPrices | null>(
+    null,
+  );
 
   if (
     dcaKeys.length === 0 &&
@@ -908,102 +987,121 @@ export default function Fills() {
 
   const trades = events.filter((event) => event.kind === "trade") as Trade[];
 
-  return (
-    <Stack gap="md">
-      <Group justify="space-between">
-        <ChangeDisplayedTradesButton
-          userAddress={userAddress}
-          dcaKeys={dcaKeys}
-          valueAverageKeys={valueAverageKeys}
-          limitOrderKeys={limitOrderKeys}
-        />
-        <TradeCountsTitle
-          dcaKeysCount={dcaKeys.length}
-          valueAverageKeysCount={valueAverageKeys.length}
-          limitOrderKeysCount={limitOrderKeys.length}
-          tradesCount={trades.length}
-        />
-        <DownloadButton
-          events={events}
-          mints={mints}
-          userAddress={userAddress}
-        />
-      </Group>
+  if (tokenPrices) {
+    console.log({ tokenPrices });
+  }
 
-      <Table stickyHeader horizontalSpacing="lg">
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Event</Table.Th>
-            <Table.Th>Date</Table.Th>
-            <Table.Th>Swapped</Table.Th>
-            <Table.Th>
-              <Group gap="xl">
-                <Text fw={700}>For</Text>
-                <Switch
-                  checked={subtractFee}
-                  onChange={() => setSubtractFee(!subtractFee)}
-                  label="Subtract fee"
-                  styles={{
-                    label: {
-                      fontWeight: "normal",
-                    },
-                  }}
-                />
-              </Group>
-            </Table.Th>
-            <Table.Th>
-              <Group gap="micro">
-                <Text>Rate</Text>
-                <ActionIcon
-                  color="gray"
-                  size="sm"
-                  onClick={switchRateType}
-                  variant="subtle"
-                  aria-label="Switch rate type"
-                >
-                  {rateType === RateType.OUTPUT_PER_INPUT ? (
-                    <IconArrowsUpDown
-                      style={{ width: "70%", height: "70%" }}
-                      stroke={1.5}
-                    />
-                  ) : (
-                    <IconArrowsDownUp
-                      style={{ width: "70%", height: "70%" }}
-                      stroke={1.5}
-                    />
-                  )}
-                </ActionIcon>
-              </Group>
-            </Table.Th>
-            <Table.Th>Transaction</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {events.map((event) => {
-            if (event.kind === "trade") {
-              return (
-                <TradeRow
-                  key={event.transactionSignature}
-                  trade={event}
-                  mints={mints}
-                  subtractFee={subtractFee}
-                  rateType={rateType}
-                  switchSubtractFee={() => setSubtractFee(!subtractFee)}
-                  switchRateType={switchRateType}
-                />
-              );
-            } else {
-              return (
-                <DepositRow
-                  key={event.transactionSignature}
-                  deposit={event}
-                  mints={mints}
-                />
-              );
-            }
-          })}
-        </Table.Tbody>
-      </Table>
-    </Stack>
+  return (
+    <>
+      <UsdValuesModal
+        opened={usdValuesModalOpened}
+        onClose={closeUsdValuesModal}
+        setTokenPrices={setTokenPrices}
+        tokenPricesToFetch={tokenPricesToFetch}
+      />
+
+      <Stack gap="md">
+        <Group justify="space-between">
+          <ChangeDisplayedTradesButton
+            userAddress={userAddress}
+            dcaKeys={dcaKeys}
+            valueAverageKeys={valueAverageKeys}
+            limitOrderKeys={limitOrderKeys}
+          />
+          <TradeCountsTitle
+            dcaKeysCount={dcaKeys.length}
+            valueAverageKeysCount={valueAverageKeys.length}
+            limitOrderKeysCount={limitOrderKeys.length}
+            tradesCount={trades.length}
+          />
+          <Group gap="lg">
+            <Button variant="outline" onClick={openUsdValuesModal}>
+              Include USD values
+            </Button>
+
+            <DownloadButton
+              events={events}
+              mints={mints}
+              userAddress={userAddress}
+            />
+          </Group>
+        </Group>
+
+        <Table stickyHeader horizontalSpacing="lg">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Event</Table.Th>
+              <Table.Th>Date</Table.Th>
+              <Table.Th>Swapped</Table.Th>
+              <Table.Th>
+                <Group gap="xl">
+                  <Text fw={700}>For</Text>
+                  <Switch
+                    checked={subtractFee}
+                    onChange={() => setSubtractFee(!subtractFee)}
+                    label="Subtract fee"
+                    styles={{
+                      label: {
+                        fontWeight: "normal",
+                      },
+                    }}
+                  />
+                </Group>
+              </Table.Th>
+              <Table.Th>
+                <Group gap="micro">
+                  <Text>Rate</Text>
+                  <ActionIcon
+                    color="gray"
+                    size="sm"
+                    onClick={switchRateType}
+                    variant="subtle"
+                    aria-label="Switch rate type"
+                  >
+                    {rateType === RateType.OUTPUT_PER_INPUT ? (
+                      <IconArrowsUpDown
+                        style={{ width: "70%", height: "70%" }}
+                        stroke={1.5}
+                      />
+                    ) : (
+                      <IconArrowsDownUp
+                        style={{ width: "70%", height: "70%" }}
+                        stroke={1.5}
+                      />
+                    )}
+                  </ActionIcon>
+                </Group>
+              </Table.Th>
+              <Table.Th>Transaction</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {events.map((event) => {
+              if (event.kind === "trade") {
+                return (
+                  <TradeRow
+                    key={event.transactionSignature}
+                    trade={event}
+                    mints={mints}
+                    subtractFee={subtractFee}
+                    rateType={rateType}
+                    switchSubtractFee={() => setSubtractFee(!subtractFee)}
+                    switchRateType={switchRateType}
+                  />
+                );
+              } else {
+                return (
+                  <DepositRow
+                    key={event.transactionSignature}
+                    deposit={event}
+                    mints={mints}
+                  />
+                );
+              }
+            })}
+          </Table.Tbody>
+        </Table>
+      </Stack>
+    </>
   );
 }
