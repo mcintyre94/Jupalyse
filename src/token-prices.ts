@@ -9,20 +9,73 @@ import {
 } from "./types";
 import { queryClient } from "./query-client";
 
+export function getAlreadyFetchedTokenPrices(
+  events: (Trade | Deposit)[],
+): FetchedTokenPrices {
+  const relevantKeys = new Set<FetchedTokenPriceKey>();
+
+  for (const event of events) {
+    const { inputMint, date } = event;
+    const timestamp = Math.floor(date.getTime() / 1000);
+    const roundedTimestamp = roundTimestampToMinuteBoundary(timestamp);
+    const inputKey: FetchedTokenPriceKey = `${inputMint}-${roundedTimestamp}`;
+    relevantKeys.add(inputKey);
+
+    if (event.kind === "trade") {
+      const { outputMint } = event;
+      const outputKey: FetchedTokenPriceKey = `${outputMint}-${roundedTimestamp}`;
+      relevantKeys.add(outputKey);
+    }
+  }
+
+  const fetchedTokenPrices: FetchedTokenPrices = {};
+
+  const cachedTokenPrices = queryClient.getQueryCache().findAll({
+    queryKey: ["tokenPrices"],
+  });
+
+  for (const cachedTokenPrice of cachedTokenPrices) {
+    if (typeof cachedTokenPrice.state.data !== "number") {
+      continue;
+    }
+
+    const [, tokenAddress, timestamp] = cachedTokenPrice.queryKey;
+    const key: FetchedTokenPriceKey = `${tokenAddress as Address}-${timestamp as Timestamp}`;
+    if (!relevantKeys.has(key)) {
+      continue;
+    }
+
+    fetchedTokenPrices[key] = cachedTokenPrice.state.data;
+  }
+
+  return fetchedTokenPrices;
+}
+
 export function getTokenPricesToFetch(
   events: (Trade | Deposit)[],
+  alreadyFetchedTokenPrices: FetchedTokenPrices,
 ): TokenPricesToFetch {
   const tokenPricesToFetch: TokenPricesToFetch = {};
 
   for (const event of events) {
     const { inputMint, date } = event;
     const timestamp = Math.floor(date.getTime() / 1000);
+    const roundedTimestamp = roundTimestampToMinuteBoundary(timestamp);
+
+    if (alreadyFetchedTokenPrices[`${inputMint}-${roundedTimestamp}`]) {
+      continue;
+    }
 
     tokenPricesToFetch[inputMint] ||= [];
     tokenPricesToFetch[inputMint].push(timestamp);
 
     if (event.kind === "trade") {
       const { outputMint } = event;
+
+      if (alreadyFetchedTokenPrices[`${outputMint}-${roundedTimestamp}`]) {
+        continue;
+      }
+
       tokenPricesToFetch[outputMint] ||= [];
       tokenPricesToFetch[outputMint].push(timestamp);
     }

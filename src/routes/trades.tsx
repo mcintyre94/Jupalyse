@@ -74,9 +74,12 @@ import { getClosedDCAs } from "../jupiter-api";
 import { toSvg } from "jdenticon";
 import { useDisclosure } from "@mantine/hooks";
 import {
+  getAlreadyFetchedTokenPrices,
   getTokenPricesToFetch,
   roundTimestampToMinuteBoundary,
 } from "../token-prices";
+import { queryClient } from "../query-client";
+import { useQueryClient } from "@tanstack/react-query";
 
 async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
   const responses = await Promise.all(
@@ -1000,28 +1003,24 @@ function TradeCountsTitle({
 function UsdValuesModal({
   opened,
   onClose,
-  setTokenPrices,
   tokenPricesToFetch,
 }: {
   opened: boolean;
   onClose: () => void;
-  setTokenPrices: Dispatch<SetStateAction<FetchedTokenPrices>>;
   tokenPricesToFetch: TokenPricesToFetch;
 }) {
   const fetcher = useFetcher();
 
-  console.log({ tokenPricesToFetch });
+  // Close after fetcher is done
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data) {
+      onClose();
+    }
+  }, [fetcher.state, fetcher.data, onClose]);
+
   const estimatedRequests = Object.values(tokenPricesToFetch).flat().length;
   // Birdeye rate limits us to 100 requests per minute
   const estimatedTimeMinutes = Math.ceil(estimatedRequests / 100);
-
-  // Pass data back to parent after fetcher is done
-  useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data) {
-      setTokenPrices(fetcher.data);
-      onClose();
-    }
-  }, [fetcher.state, fetcher.data, setTokenPrices, onClose]);
 
   return (
     <Modal opened={opened} onClose={onClose} title="Include USD values">
@@ -1071,6 +1070,10 @@ function UsdValuesModal({
   );
 }
 
+// 1. Get the already fetched token prices from the query cache
+// 2. Find which token prices are missing
+// 3. Fetch them when the modal form is submitted
+
 export default function Trades() {
   const {
     dcaKeys,
@@ -1097,12 +1100,15 @@ export default function Trades() {
     { open: openUsdValuesModal, close: closeUsdValuesModal },
   ] = useDisclosure(false);
 
+  // Intentionally not memoized so that it updates when we fetch more token prices
+  const alreadyFetchedTokenPrices = getAlreadyFetchedTokenPrices(events);
+
   const tokenPricesToFetch = useMemo(
-    () => getTokenPricesToFetch(events),
-    [events],
+    () => getTokenPricesToFetch(events, alreadyFetchedTokenPrices),
+    [events, alreadyFetchedTokenPrices],
   );
 
-  const [tokenPrices, setTokenPrices] = useState<FetchedTokenPrices>({});
+  console.log({ alreadyFetchedTokenPrices, tokenPricesToFetch });
 
   if (
     dcaKeys.length === 0 &&
@@ -1126,16 +1132,11 @@ export default function Trades() {
 
   const trades = events.filter((event) => event.kind === "trade") as Trade[];
 
-  if (tokenPrices) {
-    console.log({ tokenPrices });
-  }
-
   return (
     <>
       <UsdValuesModal
         opened={usdValuesModalOpened}
         onClose={closeUsdValuesModal}
-        setTokenPrices={setTokenPrices}
         tokenPricesToFetch={tokenPricesToFetch}
       />
 
@@ -1226,7 +1227,7 @@ export default function Trades() {
                     rateType={rateType}
                     switchSubtractFee={() => setSubtractFee(!subtractFee)}
                     switchRateType={switchRateType}
-                    tokenPrices={tokenPrices}
+                    tokenPrices={alreadyFetchedTokenPrices}
                   />
                 );
               } else {
@@ -1235,7 +1236,7 @@ export default function Trades() {
                     key={event.transactionSignature}
                     deposit={event}
                     mints={mints}
-                    tokenPrices={tokenPrices}
+                    tokenPrices={alreadyFetchedTokenPrices}
                   />
                 );
               }

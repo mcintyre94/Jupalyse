@@ -25,19 +25,19 @@ const usdTwoDecimalsFormatter = Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-const usdFourDecimalsFormatter = Intl.NumberFormat("en-US", {
+const usdEightDecimalsFormatter = Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
-  minimumFractionDigits: 4,
-  maximumFractionDigits: 4,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 8,
 });
 
 export function usdAmountDisplay(value: number) {
-  if (value < 0.0001) {
-    return "<$0.0001";
+  if (value < 0.00000001) {
+    return "<$0.00000001";
   }
 
   const formatter =
-    value < 1 ? usdFourDecimalsFormatter : usdTwoDecimalsFormatter;
+    value < 1 ? usdEightDecimalsFormatter : usdTwoDecimalsFormatter;
   return formatter.format(value);
 }
