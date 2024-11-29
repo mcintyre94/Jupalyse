@@ -1,7 +1,8 @@
+import { ActionFunctionArgs } from "react-router-dom";
 import { fetchTokenPrices } from "../token-prices";
 import { TokenPricesToFetch } from "../types";
 
-export async function action({ request }: { request: Request }) {
+export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const birdeyeApiKey = formData.get("birdeyeApiKey")?.toString();
 
@@ -19,6 +20,10 @@ export async function action({ request }: { request: Request }) {
     tokenPricesToFetchField.toString(),
   ) as TokenPricesToFetch;
 
-  const tokenPrices = await fetchTokenPrices(tokenPricesToFetch, birdeyeApiKey);
+  const tokenPrices = await fetchTokenPrices(
+    tokenPricesToFetch,
+    birdeyeApiKey,
+    request.signal,
+  );
   return tokenPrices;
 }

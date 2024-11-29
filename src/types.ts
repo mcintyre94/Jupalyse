@@ -175,5 +175,5 @@ export type TokenPricesToFetch = {
 export type FetchedTokenPriceKey = `${Address}-${Timestamp}`;
 
 export type FetchedTokenPrices = {
-  [key in FetchedTokenPriceKey]: AmountToDisplay;
+  [key in FetchedTokenPriceKey]: number;
 };

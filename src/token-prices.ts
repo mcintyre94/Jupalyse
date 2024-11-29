@@ -42,16 +42,27 @@ type BirdeyeHistoryPriceResponse = {
   };
 };
 
+export function roundTimestampToMinuteBoundary(
+  timestamp: Timestamp,
+): Timestamp {
+  return timestamp - (timestamp % 60);
+}
+
 export async function fetchTokenPrices(
   tokenPricesToFetch: TokenPricesToFetch,
   birdeyeApiKey: string,
+  abortSignal: AbortSignal,
 ): Promise<FetchedTokenPrices> {
   const fetchedTokenPrices: FetchedTokenPrices = {};
 
   for (const [tokenAddress, timestamps] of Object.entries(tokenPricesToFetch)) {
     for (const timestamp of timestamps) {
+      if (abortSignal.aborted) {
+        return fetchedTokenPrices;
+      }
+
       // round to the minute boundary before fetching
-      const roundedTimestamp = timestamp - (timestamp % 60);
+      const roundedTimestamp = roundTimestampToMinuteBoundary(timestamp);
 
       const key: FetchedTokenPriceKey = `${tokenAddress as Address}-${roundedTimestamp as Timestamp}`;
       if (fetchedTokenPrices[key]) continue;
@@ -65,13 +76,44 @@ export async function fetchTokenPrices(
       });
 
       const url = `https://public-api.birdeye.so/defi/history_price?${queryParams.toString()}`;
-
-      const response = await fetch(url, {
+      let response = await fetch(url, {
         headers: {
           "X-API-KEY": birdeyeApiKey,
           "x-chain": "solana",
         },
+        signal: abortSignal,
       });
+
+      if (response.status === 429) {
+        // Note that currently the x-ratelimit-reset header is not exposed to cors requests
+        // therefore we can't use it to optimise our wait
+        // we know they rate limit at 100 requests per minute
+        // so we just wait 1 minute before retrying
+        const waitTimeMs = 60 * 1000;
+
+        console.log(
+          `Birdeye rate limit exceeded. Waiting ${waitTimeMs / 1000}s before retrying.`,
+        );
+
+        await new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(resolve, waitTimeMs);
+          // If aborted during wait, clear timeout and reject
+          abortSignal?.addEventListener("abort", () => {
+            clearTimeout(timeoutId);
+            reject(new Error("Aborted"));
+          });
+        });
+
+        // retry the request
+        // If it fails again, we'll just handle it as an error
+        response = await fetch(url, {
+          headers: {
+            "X-API-KEY": birdeyeApiKey,
+            "x-chain": "solana",
+          },
+          signal: abortSignal,
+        });
+      }
 
       if (!(response.status === 200)) {
         console.error(
@@ -90,14 +132,11 @@ export async function fetchTokenPrices(
         console.error(
           `Failed to fetch token price for ${tokenAddress} at rounded timestamp ${roundedTimestamp} (requested timestamp: ${timestamp}). Response: ${JSON.stringify(birdeyeHistoryPriceResponse)}`,
         );
-        return {};
+        continue;
       }
 
       const price = birdeyeHistoryPriceResponse.data.items[0].value;
-      fetchedTokenPrices[key] = {
-        amount: price.toString() as StringifiedNumber,
-        adjustedForDecimals: true,
-      };
+      fetchedTokenPrices[key] = price;
     }
   }
   return fetchedTokenPrices;

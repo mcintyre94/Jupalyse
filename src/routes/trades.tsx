@@ -3,12 +3,14 @@ import {
   LoaderFunctionArgs,
   useFetcher,
   useLoaderData,
+  useNavigate,
   useNavigation,
 } from "react-router-dom";
 import {
   AmountToDisplay,
   Deposit,
   FetchDCAFillsResponse,
+  FetchedTokenPriceKey,
   FetchedTokenPrices,
   FetchValueAverageFillsResponse,
   MintData,
@@ -48,6 +50,7 @@ import {
   IconArrowsDownUp,
 } from "@tabler/icons-react";
 import {
+  dollarAmountDisplay,
   numberDisplay,
   numberDisplayAlreadyAdjustedForDecimals,
 } from "../number-display";
@@ -70,7 +73,10 @@ import {
 import { getClosedDCAs } from "../jupiter-api";
 import { toSvg } from "jdenticon";
 import { useDisclosure } from "@mantine/hooks";
-import { getTokenPricesToFetch } from "../token-prices";
+import {
+  getTokenPricesToFetch,
+  roundTimestampToMinuteBoundary,
+} from "../token-prices";
 
 type AddressAndTimestampKey = `${Address}:${number}`;
 type HistoricTokenPrices = Map<AddressAndTimestampKey, AmountToDisplay>;
@@ -423,6 +429,25 @@ function DottedAnchorLink({ href, children }: DottedAnchorLinkProps) {
   );
 }
 
+function calculateDollarAmount(
+  amount: AmountToDisplay,
+  tokenPrice: number,
+  tokenMintData: MintData | undefined,
+): number | undefined {
+  const tokenAmountAlreadyAdjustedForDecimals = amount.adjustedForDecimals;
+
+  if (tokenAmountAlreadyAdjustedForDecimals) {
+    return tokenPrice * Number(amount.amount);
+  }
+
+  if (!tokenMintData) {
+    return undefined;
+  }
+
+  const tokenAmount = Number(amount.amount) / 10 ** tokenMintData.decimals;
+  return tokenPrice * tokenAmount;
+}
+
 type TokenAmountCellProps = {
   address: Address;
   amountToDisplay: {
@@ -432,6 +457,7 @@ type TokenAmountCellProps = {
   tokenMintData: MintData | undefined;
   isDeposit: boolean;
   onNumberClick?: () => void;
+  tokenPrice?: number;
 };
 
 function TokenAmountCell({
@@ -440,8 +466,16 @@ function TokenAmountCell({
   tokenMintData,
   isDeposit,
   onNumberClick,
+  tokenPrice,
 }: TokenAmountCellProps) {
   const explorerLink = `https://explorer.solana.com/address/${address}`;
+  const { amount, adjustedForDecimals } = amountToDisplay;
+
+  const dollarAmount = useMemo(() => {
+    return tokenPrice
+      ? calculateDollarAmount(amountToDisplay, tokenPrice, tokenMintData)
+      : undefined;
+  }, [amountToDisplay, tokenPrice, tokenMintData]);
 
   if (!tokenMintData) {
     return (
@@ -449,45 +483,68 @@ function TokenAmountCell({
     );
   }
 
-  const { amount, adjustedForDecimals } = amountToDisplay;
   const formattedAmount = adjustedForDecimals
     ? numberDisplayAlreadyAdjustedForDecimals(amount)
     : numberDisplay(amount, tokenMintData.decimals);
 
+  const formattedDollarAmount = dollarAmount
+    ? dollarAmountDisplay(dollarAmount)
+    : undefined;
+
   return (
-    <Flex gap="micro" direction="row" align="center">
-      {isDeposit && <Text>Deposited</Text>}
-      <Image src={tokenMintData.logoURI} width={16} height={16} />
-      <Text>
-        <Text component="span" onClick={onNumberClick}>
-          {formattedAmount}
-        </Text>{" "}
-        <DottedAnchorLink href={explorerLink}>
-          {tokenMintData.symbol}
-        </DottedAnchorLink>
-      </Text>
-      <CopyButton value={address} timeout={2000}>
-        {({ copied, copy }) => (
-          <Tooltip
-            label={copied ? "Copied" : "Copy mint address"}
-            withArrow
-            position="right"
-          >
-            <ActionIcon
-              color={copied ? "teal" : "gray"}
-              variant="subtle"
-              onClick={copy}
+    <Stack gap={0}>
+      <Flex
+        gap="micro"
+        direction="row"
+        // when there is a dollar amount we display it underneath, flex-start alignment looks better
+        align={formattedDollarAmount ? "flex-start" : "center"}
+      >
+        {isDeposit && <Text>Deposited</Text>}
+        <Image
+          src={tokenMintData.logoURI}
+          width={16}
+          height={16}
+          // when there is a dollar amount we use flex-start alignment, need to nudge the image down to align with the text
+          mt={formattedDollarAmount ? 4 : 0}
+        />
+        <Stack gap={0}>
+          <Text>
+            <Text component="span" onClick={onNumberClick}>
+              {formattedAmount}
+            </Text>{" "}
+            <DottedAnchorLink href={explorerLink}>
+              {tokenMintData.symbol}
+            </DottedAnchorLink>
+          </Text>
+          {formattedDollarAmount ? (
+            <Text size="sm" ta="left" c="dimmed">
+              {formattedDollarAmount}
+            </Text>
+          ) : null}
+        </Stack>
+        <CopyButton value={address} timeout={2000}>
+          {({ copied, copy }) => (
+            <Tooltip
+              label={copied ? "Copied" : "Copy mint address"}
+              withArrow
+              position="right"
             >
-              {copied ? (
-                <IconCheck style={{ width: rem(16) }} />
-              ) : (
-                <IconCopy style={{ width: rem(16) }} />
-              )}
-            </ActionIcon>
-          </Tooltip>
-        )}
-      </CopyButton>
-    </Flex>
+              <ActionIcon
+                color={copied ? "teal" : "gray"}
+                variant="subtle"
+                onClick={copy}
+              >
+                {copied ? (
+                  <IconCheck style={{ width: rem(16) }} />
+                ) : (
+                  <IconCopy style={{ width: rem(16) }} />
+                )}
+              </ActionIcon>
+            </Tooltip>
+          )}
+        </CopyButton>
+      </Flex>
+    </Stack>
   );
 }
 
@@ -750,6 +807,7 @@ type TradeRowProps = {
   rateType: RateType;
   switchSubtractFee: () => void;
   switchRateType: () => void;
+  tokenPrices: FetchedTokenPrices;
 };
 
 function TradeRow({
@@ -759,6 +817,7 @@ function TradeRow({
   rateType,
   switchSubtractFee,
   switchRateType,
+  tokenPrices,
 }: TradeRowProps) {
   const inputMintData = mints.find((mint) => mint.address === trade.inputMint);
   const outputMintData = mints.find(
@@ -770,6 +829,22 @@ function TradeRow({
     [trade.outputAmount, trade.fee, subtractFee],
   );
 
+  const inputTokenPrice: number | undefined = useMemo(() => {
+    if (!tokenPrices) {
+      return undefined;
+    }
+
+    return getTokenPrice(tokenPrices, trade.inputMint, trade.date);
+  }, [trade, tokenPrices]);
+
+  const outputTokenPrice: number | undefined = useMemo(() => {
+    if (!tokenPrices) {
+      return undefined;
+    }
+
+    return getTokenPrice(tokenPrices, trade.outputMint, trade.date);
+  }, [trade, tokenPrices]);
+
   return (
     <Table.Tr key={trade.transactionSignature}>
       <Table.Td>
@@ -779,7 +854,7 @@ function TradeRow({
           strategyKey={trade.strategyKey}
         />
       </Table.Td>
-      <Table.Td>
+      <Table.Td style={{ width: "1%" }}>
         <DateCell date={trade.date} />
       </Table.Td>
       <Table.Td>
@@ -788,6 +863,7 @@ function TradeRow({
           amountToDisplay={trade.inputAmount}
           tokenMintData={inputMintData}
           isDeposit={false}
+          tokenPrice={inputTokenPrice}
         />
       </Table.Td>
       <Table.Td>
@@ -797,6 +873,7 @@ function TradeRow({
           tokenMintData={outputMintData}
           isDeposit={false}
           onNumberClick={switchSubtractFee}
+          tokenPrice={outputTokenPrice}
         />
       </Table.Td>
       <Table.Td onClick={switchRateType}>
@@ -816,15 +893,35 @@ function TradeRow({
   );
 }
 
+function getTokenPrice(
+  tokenPrices: FetchedTokenPrices,
+  mintAddress: Address,
+  date: Date,
+): number | undefined {
+  const timestamp = Math.floor(date.getTime() / 1000);
+  const roundedTimestamp = roundTimestampToMinuteBoundary(timestamp);
+  const key: FetchedTokenPriceKey = `${mintAddress}-${roundedTimestamp}`;
+  return tokenPrices[key];
+}
+
 type DepositRowProps = {
   deposit: Deposit;
   mints: MintData[];
+  tokenPrices: FetchedTokenPrices;
 };
 
-function DepositRow({ deposit, mints }: DepositRowProps) {
+function DepositRow({ deposit, mints, tokenPrices }: DepositRowProps) {
   const inputMintData = mints.find(
     (mint) => mint.address === deposit.inputMint,
   );
+
+  const tokenPrice: number | undefined = useMemo(() => {
+    if (!tokenPrices) {
+      return undefined;
+    }
+
+    return getTokenPrice(tokenPrices, deposit.inputMint, deposit.date);
+  }, [deposit, tokenPrices]);
 
   return (
     <Table.Tr key={deposit.transactionSignature}>
@@ -844,6 +941,7 @@ function DepositRow({ deposit, mints }: DepositRowProps) {
           amountToDisplay={deposit.inputAmount}
           tokenMintData={inputMintData}
           isDeposit={true}
+          tokenPrice={tokenPrice}
         />
       </Table.Td>
       <Table.Td>
@@ -891,10 +989,15 @@ function UsdValuesModal({
 }: {
   opened: boolean;
   onClose: () => void;
-  setTokenPrices: Dispatch<SetStateAction<FetchedTokenPrices | null>>;
+  setTokenPrices: Dispatch<SetStateAction<FetchedTokenPrices>>;
   tokenPricesToFetch: TokenPricesToFetch;
 }) {
   const fetcher = useFetcher();
+
+  console.log({ tokenPricesToFetch });
+  const estimatedRequests = Object.values(tokenPricesToFetch).flat().length;
+  // Birdeye rate limits us to 100 requests per minute
+  const estimatedTimeMinutes = Math.ceil(estimatedRequests / 100);
 
   // Pass data back to parent after fetcher is done
   useEffect(() => {
@@ -921,9 +1024,23 @@ function UsdValuesModal({
             autoComplete="off"
           />
 
-          <Button size="md" type="submit" loading={fetcher.state !== "idle"}>
-            Fetch USD values
-          </Button>
+          <Stack gap="micro">
+            <Button
+              maw="fit-content"
+              size="md"
+              type="submit"
+              loading={fetcher.state !== "idle"}
+            >
+              Fetch USD values
+            </Button>
+            <Text size="sm" c="dimmed">
+              Approx {estimatedRequests} prices to fetch
+              {estimatedTimeMinutes > 1 &&
+                ` (estimated time: ${estimatedTimeMinutes} minute${
+                  estimatedTimeMinutes > 1 ? "s" : ""
+                })`}
+            </Text>
+          </Stack>
         </Stack>
       </fetcher.Form>
     </Modal>
@@ -961,9 +1078,7 @@ export default function Trades() {
     [events],
   );
 
-  const [tokenPrices, setTokenPrices] = useState<FetchedTokenPrices | null>(
-    null,
-  );
+  const [tokenPrices, setTokenPrices] = useState<FetchedTokenPrices>({});
 
   if (
     dcaKeys.length === 0 &&
@@ -1087,6 +1202,7 @@ export default function Trades() {
                     rateType={rateType}
                     switchSubtractFee={() => setSubtractFee(!subtractFee)}
                     switchRateType={switchRateType}
+                    tokenPrices={tokenPrices}
                   />
                 );
               } else {
@@ -1095,6 +1211,7 @@ export default function Trades() {
                     key={event.transactionSignature}
                     deposit={event}
                     mints={mints}
+                    tokenPrices={tokenPrices}
                   />
                 );
               }
