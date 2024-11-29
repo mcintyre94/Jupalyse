@@ -55,9 +55,7 @@ import {
 } from "../number-display";
 import BigDecimal from "js-big-decimal";
 import {
-  Dispatch,
   PropsWithChildren,
-  SetStateAction,
   useCallback,
   useEffect,
   useMemo,
@@ -78,8 +76,6 @@ import {
   getTokenPricesToFetch,
   roundTimestampToMinuteBoundary,
 } from "../token-prices";
-import { queryClient } from "../query-client";
-import { useQueryClient } from "@tanstack/react-query";
 
 async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
   const responses = await Promise.all(
@@ -1110,6 +1106,14 @@ export default function Trades() {
 
   console.log({ alreadyFetchedTokenPrices, tokenPricesToFetch });
 
+  const hasAlreadyFetchedAnyTokenValues =
+    Object.values(alreadyFetchedTokenPrices).length > 0;
+  const amountOfTokenValuesMissing =
+    Object.values(tokenPricesToFetch).flat().length;
+  const [showUsdValues, setShowUsdValues] = useState(
+    hasAlreadyFetchedAnyTokenValues,
+  );
+
   if (
     dcaKeys.length === 0 &&
     valueAverageKeys.length === 0 &&
@@ -1155,9 +1159,23 @@ export default function Trades() {
             tradesCount={trades.length}
           />
           <Group gap="lg">
-            <Button variant="outline" onClick={openUsdValuesModal}>
-              Include USD values
-            </Button>
+            <Switch
+              checked={showUsdValues}
+              disabled={!hasAlreadyFetchedAnyTokenValues}
+              onChange={() => setShowUsdValues(!showUsdValues)}
+              label="Show USD prices"
+            />
+
+            {amountOfTokenValuesMissing > 0 ? (
+              <Button variant="outline" onClick={openUsdValuesModal}>
+                Fetch USD prices
+                <br />({amountOfTokenValuesMissing} Missing)
+              </Button>
+            ) : (
+              <Button variant="outline" disabled>
+                All USD prices fetched!
+              </Button>
+            )}
 
             <DownloadButton
               events={events}
@@ -1227,7 +1245,7 @@ export default function Trades() {
                     rateType={rateType}
                     switchSubtractFee={() => setSubtractFee(!subtractFee)}
                     switchRateType={switchRateType}
-                    tokenPrices={alreadyFetchedTokenPrices}
+                    tokenPrices={showUsdValues ? alreadyFetchedTokenPrices : {}}
                   />
                 );
               } else {
@@ -1236,7 +1254,7 @@ export default function Trades() {
                     key={event.transactionSignature}
                     deposit={event}
                     mints={mints}
-                    tokenPrices={alreadyFetchedTokenPrices}
+                    tokenPrices={showUsdValues ? alreadyFetchedTokenPrices : {}}
                   />
                 );
               }
