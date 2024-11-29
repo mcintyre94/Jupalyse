@@ -1034,7 +1034,7 @@ function UsdValuesModal({
         <Stack gap="md" align="flex-start">
           <TextInput
             label={
-              <Text>
+              <Text span>
                 Your{" "}
                 <DottedAnchorLink href="https://bds.birdeye.so/">
                   Birdeye
