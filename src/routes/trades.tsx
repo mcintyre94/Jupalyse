@@ -50,13 +50,14 @@ import {
   IconArrowsDownUp,
 } from "@tabler/icons-react";
 import {
-  dollarAmountDisplay,
+  usdAmountDisplay,
   numberDisplay,
   numberDisplayAlreadyAdjustedForDecimals,
 } from "../number-display";
 import BigDecimal from "js-big-decimal";
 import {
   Dispatch,
+  PropsWithChildren,
   SetStateAction,
   useCallback,
   useEffect,
@@ -429,7 +430,7 @@ function DottedAnchorLink({ href, children }: DottedAnchorLinkProps) {
   );
 }
 
-function calculateDollarAmount(
+function calculateUsdAmount(
   amount: AmountToDisplay,
   tokenPrice: number,
   tokenMintData: MintData | undefined,
@@ -446,6 +447,22 @@ function calculateDollarAmount(
 
   const tokenAmount = Number(amount.amount) / 10 ** tokenMintData.decimals;
   return tokenPrice * tokenAmount;
+}
+
+type UsdAmountProps = {
+  amount: number;
+};
+
+function UsdAmount({ amount, children }: PropsWithChildren<UsdAmountProps>) {
+  const formattedUsdAmount = usdAmountDisplay(amount);
+
+  return (
+    <Tooltip position="bottom-start" withArrow label={children} inline>
+      <Text size="sm" ta="left" c="dimmed">
+        {formattedUsdAmount}
+      </Text>
+    </Tooltip>
+  );
 }
 
 type TokenAmountCellProps = {
@@ -471,9 +488,9 @@ function TokenAmountCell({
   const explorerLink = `https://explorer.solana.com/address/${address}`;
   const { amount, adjustedForDecimals } = amountToDisplay;
 
-  const dollarAmount = useMemo(() => {
+  const usdAmount = useMemo(() => {
     return tokenPrice
-      ? calculateDollarAmount(amountToDisplay, tokenPrice, tokenMintData)
+      ? calculateUsdAmount(amountToDisplay, tokenPrice, tokenMintData)
       : undefined;
   }, [amountToDisplay, tokenPrice, tokenMintData]);
 
@@ -487,8 +504,8 @@ function TokenAmountCell({
     ? numberDisplayAlreadyAdjustedForDecimals(amount)
     : numberDisplay(amount, tokenMintData.decimals);
 
-  const formattedDollarAmount = dollarAmount
-    ? dollarAmountDisplay(dollarAmount)
+  const formattedTokenPrice = tokenPrice
+    ? usdAmountDisplay(tokenPrice)
     : undefined;
 
   return (
@@ -496,16 +513,16 @@ function TokenAmountCell({
       <Flex
         gap="micro"
         direction="row"
-        // when there is a dollar amount we display it underneath, flex-start alignment looks better
-        align={formattedDollarAmount ? "flex-start" : "center"}
+        // when there is a USD amount we display it underneath, flex-start alignment looks better
+        align={usdAmount ? "flex-start" : "center"}
       >
         {isDeposit && <Text>Deposited</Text>}
         <Image
           src={tokenMintData.logoURI}
           width={16}
           height={16}
-          // when there is a dollar amount we use flex-start alignment, need to nudge the image down to align with the text
-          mt={formattedDollarAmount ? 4 : 0}
+          // when there is a USD amount we use flex-start alignment, need to nudge the image down to align with the text
+          mt={usdAmount ? 4 : 0}
         />
         <Stack gap={0}>
           <Text>
@@ -516,10 +533,13 @@ function TokenAmountCell({
               {tokenMintData.symbol}
             </DottedAnchorLink>
           </Text>
-          {formattedDollarAmount ? (
-            <Text size="sm" ta="left" c="dimmed">
-              {formattedDollarAmount}
-            </Text>
+          {usdAmount ? (
+            <UsdAmount amount={usdAmount}>
+              <Text size="sm">
+                1 {tokenMintData.symbol ? `${tokenMintData.symbol}` : "token"} ={" "}
+                {formattedTokenPrice}
+              </Text>
+            </UsdAmount>
           ) : null}
         </Stack>
         <CopyButton value={address} timeout={2000}>
