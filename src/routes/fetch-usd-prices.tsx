@@ -5,6 +5,8 @@ import { TokenPricesToFetch } from "../types";
 export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const birdeyeApiKey = formData.get("birdeyeApiKey")?.toString();
+  const rememberApiKeyValue = formData.get("rememberApiKey")?.toString();
+  const rememberApiKey = rememberApiKeyValue === "on";
 
   if (!birdeyeApiKey) {
     throw new Error("Birdeye API key is required");
@@ -25,5 +27,12 @@ export async function action({ request }: ActionFunctionArgs) {
     birdeyeApiKey,
     request.signal,
   );
+
+  if (rememberApiKey) {
+    localStorage.setItem("birdeyeApiKey", birdeyeApiKey);
+  } else {
+    localStorage.removeItem("birdeyeApiKey");
+  }
+
   return tokenPrices;
 }

@@ -26,6 +26,7 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
   CopyButton,
   Flex,
   Group,
@@ -308,6 +309,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     (a, b) => a.date.getTime() - b.date.getTime(),
   );
 
+  const storedBirdeyeApiKey = localStorage.getItem("birdeyeApiKey");
+
   return {
     dcaKeys,
     valueAverageKeys,
@@ -315,6 +318,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     userAddress,
     events,
     mints,
+    storedBirdeyeApiKey,
   };
 }
 
@@ -996,14 +1000,16 @@ function TradeCountsTitle({
   );
 }
 
-function UsdValuesModal({
+function UsdPricesModal({
   opened,
   onClose,
   tokenPricesToFetch,
+  storedBirdeyeApiKey,
 }: {
   opened: boolean;
   onClose: () => void;
   tokenPricesToFetch: TokenPricesToFetch;
+  storedBirdeyeApiKey: string | null;
 }) {
   const fetcher = useFetcher();
 
@@ -1019,8 +1025,8 @@ function UsdValuesModal({
   const estimatedTimeMinutes = Math.ceil(estimatedRequests / 100);
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Include USD values">
-      <fetcher.Form method="POST" action="/trades/fetch-usd-values">
+    <Modal opened={opened} onClose={onClose} title="Include USD prices">
+      <fetcher.Form method="POST" action="/trades/fetch-usd-prices">
         <Input
           type="hidden"
           name="tokenPricesToFetch"
@@ -1037,10 +1043,18 @@ function UsdValuesModal({
                 API key
               </Text>
             }
-            description="Only used to fetch token values. Never sent anywhere else"
+            description="Only used to fetch token prices. Never sent anywhere else"
             name="birdeyeApiKey"
             required
             autoComplete="off"
+            defaultValue={storedBirdeyeApiKey ?? undefined}
+          />
+
+          <Checkbox
+            label="Remember API key"
+            name="rememberApiKey"
+            description="The API key will be stored in your browser"
+            defaultChecked={storedBirdeyeApiKey ? true : false}
           />
 
           <Stack gap="micro">
@@ -1050,7 +1064,7 @@ function UsdValuesModal({
               type="submit"
               loading={fetcher.state !== "idle"}
             >
-              Fetch USD values
+              Fetch USD prices
             </Button>
             <Text size="sm" c="dimmed">
               Approx {estimatedRequests} prices to fetch
@@ -1078,6 +1092,7 @@ export default function Trades() {
     userAddress,
     events,
     mints,
+    storedBirdeyeApiKey,
   } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
 
   const [rateType, setRateType] = useState<RateType>(RateType.OUTPUT_PER_INPUT);
@@ -1092,8 +1107,8 @@ export default function Trades() {
   const [subtractFee, setSubtractFee] = useState(false);
 
   const [
-    usdValuesModalOpened,
-    { open: openUsdValuesModal, close: closeUsdValuesModal },
+    usdPricesModalOpened,
+    { open: openUsdPricesModal, close: closeUsdPricesModal },
   ] = useDisclosure(false);
 
   // Intentionally not memoized so that it updates when we fetch more token prices
@@ -1106,12 +1121,12 @@ export default function Trades() {
 
   console.log({ alreadyFetchedTokenPrices, tokenPricesToFetch });
 
-  const hasAlreadyFetchedAnyTokenValues =
+  const hasAlreadyFetchedAnyTokenPrices =
     Object.values(alreadyFetchedTokenPrices).length > 0;
-  const amountOfTokenValuesMissing =
+  const amountOfTokenPricesMissing =
     Object.values(tokenPricesToFetch).flat().length;
-  const [showUsdValues, setShowUsdValues] = useState(
-    hasAlreadyFetchedAnyTokenValues,
+  const [showUsdPrices, setShowUsdPrices] = useState(
+    hasAlreadyFetchedAnyTokenPrices,
   );
 
   if (
@@ -1138,10 +1153,11 @@ export default function Trades() {
 
   return (
     <>
-      <UsdValuesModal
-        opened={usdValuesModalOpened}
-        onClose={closeUsdValuesModal}
+      <UsdPricesModal
+        opened={usdPricesModalOpened}
+        onClose={closeUsdPricesModal}
         tokenPricesToFetch={tokenPricesToFetch}
+        storedBirdeyeApiKey={storedBirdeyeApiKey}
       />
 
       <Stack gap="md">
@@ -1160,16 +1176,16 @@ export default function Trades() {
           />
           <Group gap="lg">
             <Switch
-              checked={showUsdValues}
-              disabled={!hasAlreadyFetchedAnyTokenValues}
-              onChange={() => setShowUsdValues(!showUsdValues)}
+              checked={showUsdPrices}
+              disabled={!hasAlreadyFetchedAnyTokenPrices}
+              onChange={() => setShowUsdPrices(!showUsdPrices)}
               label="Show USD prices"
             />
 
-            {amountOfTokenValuesMissing > 0 ? (
-              <Button variant="outline" onClick={openUsdValuesModal}>
+            {amountOfTokenPricesMissing > 0 ? (
+              <Button variant="outline" onClick={openUsdPricesModal}>
                 Fetch USD prices
-                <br />({amountOfTokenValuesMissing} Missing)
+                <br />({amountOfTokenPricesMissing} Missing)
               </Button>
             ) : (
               <Button variant="outline" disabled>
@@ -1245,7 +1261,7 @@ export default function Trades() {
                     rateType={rateType}
                     switchSubtractFee={() => setSubtractFee(!subtractFee)}
                     switchRateType={switchRateType}
-                    tokenPrices={showUsdValues ? alreadyFetchedTokenPrices : {}}
+                    tokenPrices={showUsdPrices ? alreadyFetchedTokenPrices : {}}
                   />
                 );
               } else {
@@ -1254,7 +1270,7 @@ export default function Trades() {
                     key={event.transactionSignature}
                     deposit={event}
                     mints={mints}
-                    tokenPrices={showUsdValues ? alreadyFetchedTokenPrices : {}}
+                    tokenPrices={showUsdPrices ? alreadyFetchedTokenPrices : {}}
                   />
                 );
               }
