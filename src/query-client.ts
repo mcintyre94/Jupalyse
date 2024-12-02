@@ -4,8 +4,10 @@ import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persist
 
 export const queryClient = new QueryClient();
 queryClient.setDefaultOptions({
+  // used for restored data
   queries: {
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: Infinity,
+    gcTime: Infinity,
   },
 });
 

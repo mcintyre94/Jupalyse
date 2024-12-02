@@ -24,6 +24,7 @@ export async function getClosedDCAs(address: Address) {
   return queryClient.fetchQuery({
     queryKey: ["closedDCAs", address],
     queryFn: () => getClosedDCAsImpl(address),
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
 
@@ -42,6 +43,7 @@ export async function getOpenDCAs(address: Address) {
   return queryClient.fetchQuery({
     queryKey: ["openDCAs", address],
     queryFn: () => getOpenDCAsImpl(address),
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
 
@@ -60,6 +62,7 @@ export async function getClosedValueAverages(address: Address) {
   return queryClient.fetchQuery({
     queryKey: ["closedValueAverages", address],
     queryFn: () => getClosedValueAveragesImpl(address),
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
 
@@ -78,6 +81,7 @@ export async function getOpenValueAverages(address: Address) {
   return queryClient.fetchQuery({
     queryKey: ["openValueAverages", address],
     queryFn: () => getOpenValueAveragesImpl(address),
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }
 
@@ -113,5 +117,6 @@ export async function getLimitOrdersWithTrades(address: Address) {
   return queryClient.fetchQuery({
     queryKey: ["limitOrdersWithTrades", address],
     queryFn: () => getLimitOrdersWithTradesImpl(address),
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }

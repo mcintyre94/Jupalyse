@@ -1121,8 +1121,10 @@ export default function Trades() {
 
   console.log({ alreadyFetchedTokenPrices, tokenPricesToFetch });
 
-  const hasAlreadyFetchedAnyTokenPrices =
-    Object.values(alreadyFetchedTokenPrices).length > 0;
+  const amountOfTokenPricesAlreadyFetched = Object.values(
+    alreadyFetchedTokenPrices,
+  ).flat().length;
+  const hasAlreadyFetchedAnyTokenPrices = amountOfTokenPricesAlreadyFetched > 0;
   const amountOfTokenPricesMissing =
     Object.values(tokenPricesToFetch).flat().length;
   const [showUsdPrices, setShowUsdPrices] = useState(
@@ -1177,9 +1179,13 @@ export default function Trades() {
           <Group gap="lg">
             <Switch
               checked={showUsdPrices}
-              disabled={!hasAlreadyFetchedAnyTokenPrices}
               onChange={() => setShowUsdPrices(!showUsdPrices)}
-              label="Show USD prices"
+              label={
+                <div>
+                  Show USD prices
+                  <br />({amountOfTokenPricesAlreadyFetched} fetched)
+                </div>
+              }
             />
 
             {amountOfTokenPricesMissing > 0 ? (
@@ -1281,3 +1287,12 @@ export default function Trades() {
     </>
   );
 }
+
+// TODO next (maybe)
+
+/**
+ *
+ * - rename event to position, only include strategy type + address
+ * - create an action column, that can be deposit or trade (maybe swap?) Between date and swapped
+ * - rename "Swapped" to "Amount"
+ */

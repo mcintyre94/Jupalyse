@@ -62,22 +62,18 @@ export function getTokenPricesToFetch(
     const timestamp = Math.floor(date.getTime() / 1000);
     const roundedTimestamp = roundTimestampToMinuteBoundary(timestamp);
 
-    if (alreadyFetchedTokenPrices[`${inputMint}-${roundedTimestamp}`]) {
-      continue;
+    if (!alreadyFetchedTokenPrices[`${inputMint}-${roundedTimestamp}`]) {
+      tokenPricesToFetch[inputMint] ||= [];
+      tokenPricesToFetch[inputMint].push(timestamp);
     }
-
-    tokenPricesToFetch[inputMint] ||= [];
-    tokenPricesToFetch[inputMint].push(timestamp);
 
     if (event.kind === "trade") {
       const { outputMint } = event;
 
-      if (alreadyFetchedTokenPrices[`${outputMint}-${roundedTimestamp}`]) {
-        continue;
+      if (!alreadyFetchedTokenPrices[`${outputMint}-${roundedTimestamp}`]) {
+        tokenPricesToFetch[outputMint] ||= [];
+        tokenPricesToFetch[outputMint].push(timestamp);
       }
-
-      tokenPricesToFetch[outputMint] ||= [];
-      tokenPricesToFetch[outputMint].push(timestamp);
     }
   }
 
@@ -184,7 +180,7 @@ async function fetchTokenPriceAtTimestamp(
   birdeyeApiKey: string,
   abortSignal: AbortSignal,
 ) {
-  return queryClient.fetchQuery({
+  return queryClient.ensureQueryData({
     queryKey: ["tokenPrices", tokenAddress, timestamp],
     queryFn: () =>
       fetchTokenPriceAtTimestampImpl(
