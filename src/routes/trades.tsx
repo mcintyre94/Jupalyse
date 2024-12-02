@@ -471,7 +471,6 @@ type TokenAmountCellProps = {
     adjustedForDecimals: boolean;
   };
   tokenMintData: MintData | undefined;
-  isDeposit: boolean;
   onNumberClick?: () => void;
   tokenPrice?: number;
 };
@@ -480,7 +479,6 @@ function TokenAmountCell({
   address,
   amountToDisplay,
   tokenMintData,
-  isDeposit,
   onNumberClick,
   tokenPrice,
 }: TokenAmountCellProps) {
@@ -515,7 +513,6 @@ function TokenAmountCell({
         // when there is a USD amount we display it underneath, flex-start alignment looks better
         align={usdAmount ? "flex-start" : "center"}
       >
-        {isDeposit && <Text>Deposited</Text>}
         <Image
           src={tokenMintData.logoURI}
           width={16}
@@ -722,19 +719,16 @@ function StrategyKeyIcon({ strategyKey }: { strategyKey: Address }) {
 }
 
 type TransactionEventCellProps = {
-  eventType: "deposit" | "trade";
   strategyType: StrategyType;
   strategyKey: Address;
 };
 
 function TransactionEventCell({
-  eventType,
   strategyType,
   strategyKey,
 }: TransactionEventCellProps) {
   return (
-    <Group maw={150} justify="space-between">
-      <TransactionEventTypeBadge eventType={eventType} />
+    <Group maw={120} justify="space-between">
       <TransactionStrategyBadge strategyType={strategyType} />
       <StrategyKeyIcon strategyKey={strategyKey} />
     </Group>
@@ -868,7 +862,6 @@ function TradeRow({
     <Table.Tr key={trade.transactionSignature}>
       <Table.Td>
         <TransactionEventCell
-          eventType="trade"
           strategyType={trade.strategyType}
           strategyKey={trade.strategyKey}
         />
@@ -877,11 +870,13 @@ function TradeRow({
         <DateCell date={trade.date} />
       </Table.Td>
       <Table.Td>
+        <TransactionEventTypeBadge eventType="trade" />
+      </Table.Td>
+      <Table.Td>
         <TokenAmountCell
           address={trade.inputMint}
           amountToDisplay={trade.inputAmount}
           tokenMintData={inputMintData}
-          isDeposit={false}
           tokenPrice={inputTokenPrice}
         />
       </Table.Td>
@@ -890,7 +885,6 @@ function TradeRow({
           address={trade.outputMint}
           amountToDisplay={outputAmountWithFee}
           tokenMintData={outputMintData}
-          isDeposit={false}
           onNumberClick={switchSubtractFee}
           tokenPrice={outputTokenPrice}
         />
@@ -946,7 +940,6 @@ function DepositRow({ deposit, mints, tokenPrices }: DepositRowProps) {
     <Table.Tr key={deposit.transactionSignature}>
       <Table.Td>
         <TransactionEventCell
-          eventType="deposit"
           strategyType={deposit.strategyType}
           strategyKey={deposit.strategyKey}
         />
@@ -954,12 +947,14 @@ function DepositRow({ deposit, mints, tokenPrices }: DepositRowProps) {
       <Table.Td>
         <DateCell date={deposit.date} />
       </Table.Td>
+      <Table.Td>
+        <TransactionEventTypeBadge eventType="deposit" />
+      </Table.Td>
       <Table.Td colSpan={3}>
         <TokenAmountCell
           address={deposit.inputMint}
           amountToDisplay={deposit.inputAmount}
           tokenMintData={inputMintData}
-          isDeposit={true}
           tokenPrice={tokenPrice}
         />
       </Table.Td>
@@ -1210,9 +1205,10 @@ export default function Trades() {
         <Table stickyHeader horizontalSpacing="lg">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Event</Table.Th>
+              <Table.Th>Position</Table.Th>
               <Table.Th>Date</Table.Th>
-              <Table.Th>Swapped</Table.Th>
+              <Table.Th>Action</Table.Th>
+              <Table.Th>Amount</Table.Th>
               <Table.Th>
                 <Group gap="xl">
                   <Text fw={700}>For</Text>
@@ -1287,12 +1283,3 @@ export default function Trades() {
     </>
   );
 }
-
-// TODO next (maybe)
-
-/**
- *
- * - rename event to position, only include strategy type + address
- * - create an action column, that can be deposit or trade (maybe swap?) Between date and swapped
- * - rename "Swapped" to "Amount"
- */
