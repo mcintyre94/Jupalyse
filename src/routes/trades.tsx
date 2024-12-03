@@ -326,9 +326,15 @@ type DownloadButtonProps = {
   events: (Trade | Deposit)[];
   mints: MintData[];
   userAddress: Address;
+  fetchedTokenPrices: FetchedTokenPrices;
 };
 
-function DownloadButton({ events, mints, userAddress }: DownloadButtonProps) {
+function DownloadButton({
+  events,
+  mints,
+  userAddress,
+  fetchedTokenPrices,
+}: DownloadButtonProps) {
   const fetcher = useFetcher();
   const isLoading = fetcher.state === "loading";
   const downloadLinkRef = useRef<HTMLAnchorElement>(null);
@@ -338,6 +344,7 @@ function DownloadButton({ events, mints, userAddress }: DownloadButtonProps) {
       JSON.stringify({
         events,
         mints,
+        fetchedTokenPrices,
       }),
       {
         method: "post",
@@ -345,7 +352,7 @@ function DownloadButton({ events, mints, userAddress }: DownloadButtonProps) {
         encType: "application/json",
       },
     );
-  }, [events, mints]);
+  }, [events, mints, fetchedTokenPrices]);
 
   useEffect(() => {
     if (fetcher.data && fetcher.state === "idle") {
@@ -1198,6 +1205,7 @@ export default function Trades() {
               events={events}
               mints={mints}
               userAddress={userAddress}
+              fetchedTokenPrices={alreadyFetchedTokenPrices}
             />
           </Group>
         </Group>
@@ -1283,3 +1291,5 @@ export default function Trades() {
     </>
   );
 }
+
+// TODO: add USD prices to CSV!
