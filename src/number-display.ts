@@ -17,3 +17,27 @@ export function numberDisplayAlreadyAdjustedForDecimals(
   // we use the formatter to get better display, eg `123456` -> `123,456`
   return formatter.format(`${value}`);
 }
+
+const usdTwoDecimalsFormatter = Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const usdEightDecimalsFormatter = Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 8,
+});
+
+export function usdAmountDisplay(value: number) {
+  if (value < 0.00000001) {
+    return "<$0.00000001";
+  }
+
+  const formatter =
+    value < 1 ? usdEightDecimalsFormatter : usdTwoDecimalsFormatter;
+  return formatter.format(value);
+}

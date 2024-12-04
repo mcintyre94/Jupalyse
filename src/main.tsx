@@ -8,6 +8,7 @@ import StrategiesRoute, {
 } from "./routes/strategies";
 import TradesRoute, { loader as TradesLoader } from "./routes/trades";
 import { action as TradesCsvAction } from "./routes/trades-csv";
+import { action as FetchUsdPricesAction } from "./routes/fetch-usd-prices";
 import { createTheme, MantineProvider } from "@mantine/core";
 
 import "@mantine/core/styles.css";
@@ -37,6 +38,10 @@ const router = createBrowserRouter([
       {
         path: "/trades/csv",
         action: TradesCsvAction,
+      },
+      {
+        path: "/trades/fetch-usd-prices",
+        action: FetchUsdPricesAction,
       },
     ],
   },
