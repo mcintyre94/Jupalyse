@@ -100,7 +100,7 @@ async function getLimitOrdersWithTradesImpl(address: Address) {
 
   while (hasMoreData) {
     const response = await fetch(
-      `https://api.jup.ag/limit/v2/orderHistory?wallet=${address}&page=${page}`,
+      `https://api.jup.ag/trigger/v1/orderHistory?wallet=${address}&page=${page}`,
     );
     if (response.status >= 400) {
       throw new Error("Error fetching limit orders from Jupiter");
