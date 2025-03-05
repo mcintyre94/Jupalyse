@@ -6,10 +6,14 @@ import {
   FetchValueAveragesResponse,
   LimitOrderFetchedAccount,
   LimitOrderOrdersResponse,
+  DCAFetchedAccount,
+  ValueAverageFetchedAccount,
 } from "./types";
 import { queryClient } from "./query-client";
 
-async function getClosedDCAsImpl(address: Address) {
+async function getClosedDCAsImpl(
+  address: Address,
+): Promise<DCAFetchedAccount[]> {
   const response = await fetch(
     `https://dca-api.jup.ag/user/${address}?status=${DCAStatus.CLOSED}`,
   );
@@ -20,7 +24,9 @@ async function getClosedDCAsImpl(address: Address) {
   return data.data.dcaAccounts;
 }
 
-export async function getClosedDCAs(address: Address) {
+export async function getClosedDCAs(
+  address: Address,
+): Promise<DCAFetchedAccount[]> {
   return queryClient.fetchQuery({
     queryKey: ["closedDCAs", address],
     queryFn: () => getClosedDCAsImpl(address),
@@ -28,7 +34,7 @@ export async function getClosedDCAs(address: Address) {
   });
 }
 
-async function getOpenDCAsImpl(address: Address) {
+async function getOpenDCAsImpl(address: Address): Promise<DCAFetchedAccount[]> {
   const response = await fetch(
     `https://dca-api.jup.ag/user/${address}?status=${DCAStatus.OPEN}`,
   );
@@ -39,7 +45,9 @@ async function getOpenDCAsImpl(address: Address) {
   return data.data.dcaAccounts;
 }
 
-export async function getOpenDCAs(address: Address) {
+export async function getOpenDCAs(
+  address: Address,
+): Promise<DCAFetchedAccount[]> {
   return queryClient.fetchQuery({
     queryKey: ["openDCAs", address],
     queryFn: () => getOpenDCAsImpl(address),
@@ -47,7 +55,9 @@ export async function getOpenDCAs(address: Address) {
   });
 }
 
-async function getClosedValueAveragesImpl(address: Address) {
+async function getClosedValueAveragesImpl(
+  address: Address,
+): Promise<ValueAverageFetchedAccount[]> {
   const response = await fetch(
     `https://va.jup.ag/value-averages?user=${address}&status=${ValueAverageStatus.CLOSED}`,
   );
@@ -58,7 +68,9 @@ async function getClosedValueAveragesImpl(address: Address) {
   return data.data.valueAverageAccounts;
 }
 
-export async function getClosedValueAverages(address: Address) {
+export async function getClosedValueAverages(
+  address: Address,
+): Promise<ValueAverageFetchedAccount[]> {
   return queryClient.fetchQuery({
     queryKey: ["closedValueAverages", address],
     queryFn: () => getClosedValueAveragesImpl(address),
@@ -66,7 +78,9 @@ export async function getClosedValueAverages(address: Address) {
   });
 }
 
-async function getOpenValueAveragesImpl(address: Address) {
+async function getOpenValueAveragesImpl(
+  address: Address,
+): Promise<ValueAverageFetchedAccount[]> {
   const response = await fetch(
     `https://va.jup.ag/value-averages?user=${address}&status=${ValueAverageStatus.OPEN}`,
   );
@@ -77,7 +91,9 @@ async function getOpenValueAveragesImpl(address: Address) {
   return data.data.valueAverageAccounts;
 }
 
-export async function getOpenValueAverages(address: Address) {
+export async function getOpenValueAverages(
+  address: Address,
+): Promise<ValueAverageFetchedAccount[]> {
   return queryClient.fetchQuery({
     queryKey: ["openValueAverages", address],
     queryFn: () => getOpenValueAveragesImpl(address),
