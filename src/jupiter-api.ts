@@ -4,7 +4,7 @@ import {
   FetchDCAsResponse,
   ValueAverageStatus,
   FetchValueAveragesResponse,
-  LimitOrderFetchedAccount,
+  TriggerFetchedAccount,
   LimitOrderOrdersResponse,
   DCAFetchedAccount,
   ValueAverageFetchedAccount,
@@ -101,38 +101,68 @@ export async function getOpenValueAverages(
   });
 }
 
-// Note that these are limit orders which may or may not have been closed, but have at least one trade
-// The `openOrders` API gives open limit orders, but does not include any trades in the output
-// If a limit order has a trade, this should be in `orderHistory`
-// So for our purpose we only look at `orderHistory`
-// This is different from DCA and Value Averages, where they only move from open to closed when they are completed
-// and we care about both open and closed states
-// With limit orders, we just need `orderHistory` because only it includes trades
-async function getLimitOrdersWithTradesImpl(address: Address) {
-  // Note that this API is paginated
+async function getClosedTriggersImpl(
+  address: Address,
+): Promise<TriggerFetchedAccount[]> {
+  //   // Note that this API is paginated
   let page = 1;
-  let hasMoreData = true;
-  const orders: LimitOrderFetchedAccount[] = [];
+  let totalPages = 1;
+  const orders: TriggerFetchedAccount[] = [];
 
-  while (hasMoreData) {
+  while (page <= totalPages) {
     const response = await fetch(
       `https://api.jup.ag/trigger/v1/orderHistory?wallet=${address}&page=${page}`,
     );
     if (response.status >= 400) {
-      throw new Error("Error fetching limit orders from Jupiter");
+      throw new Error("Error fetching closed trigger orders from Jupiter");
     }
     const data = (await response.json()) as LimitOrderOrdersResponse;
     orders.push(...data.orders.filter((order) => order.trades.length > 0));
-    hasMoreData = data.hasMoreData;
-    page = data.page + 1;
+    totalPages = data.totalPages;
+    page += 1;
   }
   return orders;
 }
 
-export async function getLimitOrdersWithTrades(address: Address) {
+export async function getClosedTriggers(
+  address: Address,
+): Promise<TriggerFetchedAccount[]> {
   return queryClient.fetchQuery({
-    queryKey: ["limitOrdersWithTrades", address],
-    queryFn: () => getLimitOrdersWithTradesImpl(address),
+    queryKey: ["closedTriggers", address],
+    queryFn: () => getClosedTriggersImpl(address),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+async function getOpenTriggersImpl(
+  address: Address,
+): Promise<TriggerFetchedAccount[]> {
+  // Note that this API is paginated
+  let page = 1;
+  let totalPages = 1;
+  const orders: TriggerFetchedAccount[] = [];
+
+  while (page <= totalPages) {
+    const response = await fetch(
+      `https://api.jup.ag/trigger/v1/openOrders?responseV2=1&wallet=${address}&page=${page}`,
+    );
+    if (response.status >= 400) {
+      throw new Error("Error fetching open trigger orders from Jupiter");
+    }
+    const data = (await response.json()) as LimitOrderOrdersResponse;
+    orders.push(...data.orders.filter((order) => order.trades.length > 0));
+    totalPages = data.totalPages;
+    page += 1;
+  }
+  return orders;
+}
+
+export async function getOpenTriggers(
+  address: Address,
+): Promise<TriggerFetchedAccount[]> {
+  return queryClient.fetchQuery({
+    queryKey: ["openTriggers", address],
+    queryFn: () => getOpenTriggersImpl(address),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }

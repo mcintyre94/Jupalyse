@@ -115,7 +115,7 @@ type LimitOrderTrade = {
   txId: Signature;
 };
 
-export type LimitOrderFetchedAccount = {
+export type TriggerFetchedAccount = {
   orderKey: Address;
   inputMint: Address;
   outputMint: Address;
@@ -129,8 +129,8 @@ export type LimitOrderFetchedAccount = {
 };
 
 export type LimitOrderOrdersResponse = {
-  orders: LimitOrderFetchedAccount[];
-  hasMoreData: boolean;
+  orders: TriggerFetchedAccount[];
+  totalPages: number;
   page: number;
 };
 
@@ -139,7 +139,7 @@ export type AmountToDisplay = {
   adjustedForDecimals: boolean;
 };
 
-export type StrategyType = "dca" | "value average" | "limit order";
+export type StrategyType = "dca" | "value average" | "trigger";
 
 export type Deposit = {
   kind: "deposit";

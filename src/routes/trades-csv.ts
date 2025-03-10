@@ -23,7 +23,7 @@ type InputData = {
   fetchedTokenPrices: FetchedTokenPrices;
 };
 
-type ShortStrategyType = "DCA" | "VA" | "LO";
+type ShortStrategyType = "DCA" | "VA" | "Trigger";
 
 type CSVTradeDataRow = {
   kind: "trade";
@@ -150,7 +150,7 @@ function getAmountBigDecimal(
 function getShortStrategyType(strategyType: StrategyType): ShortStrategyType {
   if (strategyType === "dca") return "DCA";
   if (strategyType === "value average") return "VA";
-  if (strategyType === "limit order") return "LO";
+  if (strategyType === "trigger") return "Trigger";
   throw new Error(`Unknown strategy type: ${strategyType}`);
 }
 
