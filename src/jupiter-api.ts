@@ -4,12 +4,16 @@ import {
   FetchDCAsResponse,
   ValueAverageStatus,
   FetchValueAveragesResponse,
-  LimitOrderFetchedAccount,
+  TriggerFetchedAccount,
   LimitOrderOrdersResponse,
+  DCAFetchedAccount,
+  ValueAverageFetchedAccount,
 } from "./types";
 import { queryClient } from "./query-client";
 
-async function getClosedDCAsImpl(address: Address) {
+async function getClosedDCAsImpl(
+  address: Address,
+): Promise<DCAFetchedAccount[]> {
   const response = await fetch(
     `https://dca-api.jup.ag/user/${address}?status=${DCAStatus.CLOSED}`,
   );
@@ -20,7 +24,9 @@ async function getClosedDCAsImpl(address: Address) {
   return data.data.dcaAccounts;
 }
 
-export async function getClosedDCAs(address: Address) {
+export async function getClosedDCAs(
+  address: Address,
+): Promise<DCAFetchedAccount[]> {
   return queryClient.fetchQuery({
     queryKey: ["closedDCAs", address],
     queryFn: () => getClosedDCAsImpl(address),
@@ -28,7 +34,7 @@ export async function getClosedDCAs(address: Address) {
   });
 }
 
-async function getOpenDCAsImpl(address: Address) {
+async function getOpenDCAsImpl(address: Address): Promise<DCAFetchedAccount[]> {
   const response = await fetch(
     `https://dca-api.jup.ag/user/${address}?status=${DCAStatus.OPEN}`,
   );
@@ -39,7 +45,9 @@ async function getOpenDCAsImpl(address: Address) {
   return data.data.dcaAccounts;
 }
 
-export async function getOpenDCAs(address: Address) {
+export async function getOpenDCAs(
+  address: Address,
+): Promise<DCAFetchedAccount[]> {
   return queryClient.fetchQuery({
     queryKey: ["openDCAs", address],
     queryFn: () => getOpenDCAsImpl(address),
@@ -47,7 +55,9 @@ export async function getOpenDCAs(address: Address) {
   });
 }
 
-async function getClosedValueAveragesImpl(address: Address) {
+async function getClosedValueAveragesImpl(
+  address: Address,
+): Promise<ValueAverageFetchedAccount[]> {
   const response = await fetch(
     `https://va.jup.ag/value-averages?user=${address}&status=${ValueAverageStatus.CLOSED}`,
   );
@@ -58,7 +68,9 @@ async function getClosedValueAveragesImpl(address: Address) {
   return data.data.valueAverageAccounts;
 }
 
-export async function getClosedValueAverages(address: Address) {
+export async function getClosedValueAverages(
+  address: Address,
+): Promise<ValueAverageFetchedAccount[]> {
   return queryClient.fetchQuery({
     queryKey: ["closedValueAverages", address],
     queryFn: () => getClosedValueAveragesImpl(address),
@@ -66,7 +78,9 @@ export async function getClosedValueAverages(address: Address) {
   });
 }
 
-async function getOpenValueAveragesImpl(address: Address) {
+async function getOpenValueAveragesImpl(
+  address: Address,
+): Promise<ValueAverageFetchedAccount[]> {
   const response = await fetch(
     `https://va.jup.ag/value-averages?user=${address}&status=${ValueAverageStatus.OPEN}`,
   );
@@ -77,7 +91,9 @@ async function getOpenValueAveragesImpl(address: Address) {
   return data.data.valueAverageAccounts;
 }
 
-export async function getOpenValueAverages(address: Address) {
+export async function getOpenValueAverages(
+  address: Address,
+): Promise<ValueAverageFetchedAccount[]> {
   return queryClient.fetchQuery({
     queryKey: ["openValueAverages", address],
     queryFn: () => getOpenValueAveragesImpl(address),
@@ -85,38 +101,68 @@ export async function getOpenValueAverages(address: Address) {
   });
 }
 
-// Note that these are limit orders which may or may not have been closed, but have at least one trade
-// The `openOrders` API gives open limit orders, but does not include any trades in the output
-// If a limit order has a trade, this should be in `orderHistory`
-// So for our purpose we only look at `orderHistory`
-// This is different from DCA and Value Averages, where they only move from open to closed when they are completed
-// and we care about both open and closed states
-// With limit orders, we just need `orderHistory` because only it includes trades
-async function getLimitOrdersWithTradesImpl(address: Address) {
-  // Note that this API is paginated
+async function getClosedTriggersImpl(
+  address: Address,
+): Promise<TriggerFetchedAccount[]> {
+  //   // Note that this API is paginated
   let page = 1;
-  let hasMoreData = true;
-  const orders: LimitOrderFetchedAccount[] = [];
+  let totalPages = 1;
+  const orders: TriggerFetchedAccount[] = [];
 
-  while (hasMoreData) {
+  while (page <= totalPages) {
     const response = await fetch(
       `https://api.jup.ag/trigger/v1/orderHistory?wallet=${address}&page=${page}`,
     );
     if (response.status >= 400) {
-      throw new Error("Error fetching limit orders from Jupiter");
+      throw new Error("Error fetching closed trigger orders from Jupiter");
     }
     const data = (await response.json()) as LimitOrderOrdersResponse;
     orders.push(...data.orders.filter((order) => order.trades.length > 0));
-    hasMoreData = data.hasMoreData;
-    page = data.page + 1;
+    totalPages = data.totalPages;
+    page += 1;
   }
   return orders;
 }
 
-export async function getLimitOrdersWithTrades(address: Address) {
+export async function getClosedTriggers(
+  address: Address,
+): Promise<TriggerFetchedAccount[]> {
   return queryClient.fetchQuery({
-    queryKey: ["limitOrdersWithTrades", address],
-    queryFn: () => getLimitOrdersWithTradesImpl(address),
+    queryKey: ["closedTriggers", address],
+    queryFn: () => getClosedTriggersImpl(address),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+async function getOpenTriggersImpl(
+  address: Address,
+): Promise<TriggerFetchedAccount[]> {
+  // Note that this API is paginated
+  let page = 1;
+  let totalPages = 1;
+  const orders: TriggerFetchedAccount[] = [];
+
+  while (page <= totalPages) {
+    const response = await fetch(
+      `https://api.jup.ag/trigger/v1/openOrders?responseV2=1&wallet=${address}&page=${page}`,
+    );
+    if (response.status >= 400) {
+      throw new Error("Error fetching open trigger orders from Jupiter");
+    }
+    const data = (await response.json()) as LimitOrderOrdersResponse;
+    orders.push(...data.orders.filter((order) => order.trades.length > 0));
+    totalPages = data.totalPages;
+    page += 1;
+  }
+  return orders;
+}
+
+export async function getOpenTriggers(
+  address: Address,
+): Promise<TriggerFetchedAccount[]> {
+  return queryClient.fetchQuery({
+    queryKey: ["openTriggers", address],
+    queryFn: () => getOpenTriggersImpl(address),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }

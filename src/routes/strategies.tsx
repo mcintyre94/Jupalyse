@@ -21,7 +21,7 @@ import {
 import {
   DCAFetchedAccount,
   DCAStatus,
-  LimitOrderFetchedAccount,
+  TriggerFetchedAccount,
   MintData,
   ValueAverageFetchedAccount,
   ValueAverageStatus,
@@ -38,7 +38,8 @@ import {
   getOpenDCAs,
   getClosedValueAverages,
   getOpenValueAverages,
-  getLimitOrdersWithTrades,
+  getClosedTriggers,
+  getOpenTriggers,
 } from "../jupiter-api";
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
@@ -53,13 +54,15 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     openDCAs,
     closedValueAverages,
     openValueAverages,
-    limitOrders,
+    closedTriggers,
+    openTriggers,
   ] = await Promise.all([
     getClosedDCAs(address),
     getOpenDCAs(address),
     getClosedValueAverages(address),
     getOpenValueAverages(address),
-    getLimitOrdersWithTrades(address),
+    getClosedTriggers(address),
+    getOpenTriggers(address),
   ]);
 
   const uniqueMintAddresses: Address[] = Array.from(
@@ -68,7 +71,8 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       ...openDCAs.flatMap((dca) => [dca.inputMint, dca.outputMint]),
       ...closedValueAverages.flatMap((va) => [va.inputMint, va.outputMint]),
       ...openValueAverages.flatMap((va) => [va.inputMint, va.outputMint]),
-      ...limitOrders.flatMap((order) => [order.inputMint, order.outputMint]),
+      ...closedTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
+      ...openTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
     ]),
   );
 
@@ -80,16 +84,17 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const valueAverageKeys = new Set(
     new URL(request.url).searchParams.getAll("va") as Address[],
   );
-  const limitOrderKeys = new Set(
-    new URL(request.url).searchParams.getAll("lo") as Address[],
+  const triggerKeys = new Set(
+    new URL(request.url).searchParams.getAll("trigger") as Address[],
   );
+
   return {
     dcas: [...closedDCAs, ...openDCAs],
     valueAverages: [...closedValueAverages, ...openValueAverages],
-    limitOrders,
+    triggers: [...closedTriggers, ...openTriggers],
     selectedDcaKeys: dcaKeys,
     selectedValueAverageKeys: valueAverageKeys,
-    selectedLimitOrderKeys: limitOrderKeys,
+    selectedTriggerKeys: triggerKeys,
     mints,
   };
 }
@@ -97,12 +102,12 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 type AccountWithType =
   | { account: DCAFetchedAccount; type: "dca" }
   | { account: ValueAverageFetchedAccount; type: "va" }
-  | { account: LimitOrderFetchedAccount; type: "lo" };
+  | { account: TriggerFetchedAccount; type: "trigger" };
 
 type AccountsWithType =
   | { accounts: DCAFetchedAccount[]; type: "dca" }
   | { accounts: ValueAverageFetchedAccount[]; type: "va" }
-  | { accounts: LimitOrderFetchedAccount[]; type: "lo" };
+  | { accounts: TriggerFetchedAccount[]; type: "trigger" };
 
 function getKey(accountWithType: AccountWithType) {
   const { account, type } = accountWithType;
@@ -160,8 +165,8 @@ function getIsOpen(
   return account.status === ValueAverageStatus.OPEN;
 }
 
-function getLimitOrderStatusText(limitOrder: LimitOrderFetchedAccount) {
-  const { status, trades } = limitOrder;
+function getTriggerStatusText(trigger: TriggerFetchedAccount) {
+  const { status, trades } = trigger;
 
   if (status === "Completed") {
     if (trades.length === 0) {
@@ -228,8 +233,8 @@ function SingleItemCheckboxLabel({
     );
   }
 
-  if (type === "lo") {
-    const statusText = getLimitOrderStatusText(account);
+  if (type === "trigger") {
+    const statusText = getTriggerStatusText(account);
     return (
       <Group>
         <Text size="sm">
@@ -299,7 +304,7 @@ function getFirstAccountWithType(
   }
   return {
     account: accountsWithType.accounts[0],
-    type: "lo",
+    type: "trigger",
   };
 }
 
@@ -338,8 +343,8 @@ function CheckboxGroupItemLabel({
     );
   }
 
-  if (type === "lo") {
-    const statusText = getLimitOrderStatusText(account);
+  if (type === "trigger") {
+    const statusText = getTriggerStatusText(account);
     return (
       <Group align="center">
         <Text size="sm">
@@ -440,7 +445,7 @@ type CheckboxGroupProps = BaseCheckboxGroupProps & {
   accountsWithType:
     | { accounts: DCAFetchedAccount[]; type: "dca" }
     | { accounts: ValueAverageFetchedAccount[]; type: "va" }
-    | { accounts: LimitOrderFetchedAccount[]; type: "lo" };
+    | { accounts: TriggerFetchedAccount[]; type: "trigger" };
 };
 
 function CheckboxGroup({
@@ -498,10 +503,10 @@ export default function Strategies() {
   const {
     dcas,
     valueAverages,
-    limitOrders,
+    triggers,
     selectedDcaKeys,
     selectedValueAverageKeys,
-    selectedLimitOrderKeys,
+    selectedTriggerKeys,
     mints,
   } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
 
@@ -529,20 +534,20 @@ export default function Strategies() {
     {} as Record<string, ValueAverageFetchedAccount[]>,
   );
 
-  const groupedLimitOrders = limitOrders.reduce(
-    (acc, lo) => {
-      const key = `${lo.inputMint}-${lo.outputMint}`;
+  const groupedTriggers = triggers.reduce(
+    (acc, trigger) => {
+      const key = `${trigger.inputMint}-${trigger.outputMint}`;
       acc[key] ??= [];
-      acc[key].push(lo);
+      acc[key].push(trigger);
       return acc;
     },
-    {} as Record<string, LimitOrderFetchedAccount[]>,
+    {} as Record<string, TriggerFetchedAccount[]>,
   );
 
   const allSelectedKeys = new Set([
     ...selectedDcaKeys,
     ...selectedValueAverageKeys,
-    ...selectedLimitOrderKeys,
+    ...selectedTriggerKeys,
   ]);
 
   return (
@@ -597,15 +602,15 @@ export default function Strategies() {
               <Text fs="italic">No Jupiter VAs found for {address}</Text>
             )}
 
-            {Object.keys(groupedLimitOrders).length > 0 ? (
+            {Object.keys(groupedTriggers).length > 0 ? (
               <Stack gap="sm">
-                <Title order={4}>Limit Orders</Title>
-                {Object.entries(groupedLimitOrders).map(([key, los]) => (
+                <Title order={4}>Triggers</Title>
+                {Object.entries(groupedTriggers).map(([key, triggers]) => (
                   <CheckboxGroup
                     key={key}
                     accountsWithType={{
-                      accounts: los,
-                      type: "lo",
+                      accounts: triggers,
+                      type: "trigger",
                     }}
                     selectedKeys={allSelectedKeys}
                     mints={mints}
@@ -614,7 +619,7 @@ export default function Strategies() {
               </Stack>
             ) : (
               <Text fs="italic">
-                No Jupiter Limit Orders found for {address}
+                No Jupiter Trigger orders found for {address}
               </Text>
             )}
 

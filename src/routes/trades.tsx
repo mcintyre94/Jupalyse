@@ -64,9 +64,10 @@ import {
   useState,
 } from "react";
 import {
+  getClosedTriggers,
   getClosedValueAverages,
-  getLimitOrdersWithTrades,
   getOpenDCAs,
+  getOpenTriggers,
   getOpenValueAverages,
 } from "../jupiter-api";
 import { getClosedDCAs } from "../jupiter-api";
@@ -155,19 +156,22 @@ async function getValueAverageFills(
   });
 }
 
-async function getLimitOrderTrades(
+async function getTriggerOrderTrades(
   userAddress: Address,
-  limitOrderKeys: Address[],
+  triggerKeys: Address[],
 ): Promise<Trade[]> {
-  // Limit orders are fetched by user address, so fetch them all (cached with react-query),
+  // Triggers are fetched by user address, so fetch them all (cached with react-query),
   // then filter to only those selected
-  const limitOrders = await getLimitOrdersWithTrades(userAddress);
-  const limitOrderKeysSet = new Set(limitOrderKeys);
-  const limitOrderTrades = limitOrders
+  const [closedTriggers, openTriggers] = await Promise.all([
+    getClosedTriggers(userAddress),
+    getOpenTriggers(userAddress),
+  ]);
+  const limitOrderKeysSet = new Set(triggerKeys);
+  const triggerOrderTrades = [...closedTriggers, ...openTriggers]
     .filter((order) => limitOrderKeysSet.has(order.orderKey))
     .flatMap((order) => order.trades);
 
-  return limitOrderTrades.map((trade) => ({
+  return triggerOrderTrades.map((trade) => ({
     kind: "trade",
     date: new Date(trade.confirmedAt),
     inputMint: trade.inputMint,
@@ -184,7 +188,7 @@ async function getLimitOrderTrades(
       amount: trade.feeAmount,
       adjustedForDecimals: true,
     },
-    strategyType: "limit order",
+    strategyType: "trigger",
     strategyKey: trade.orderKey,
     userAddress,
     transactionSignature: trade.txId,
@@ -202,13 +206,15 @@ async function getDeposits(
     openDCAs,
     closedValueAverages,
     openValueAverages,
-    limitOrdersWithTrades,
+    closedTriggers,
+    openTriggers,
   ] = await Promise.all([
     dcaKeys.size > 0 ? getClosedDCAs(userAddress) : [],
     dcaKeys.size > 0 ? getOpenDCAs(userAddress) : [],
     valueAverageKeys.size > 0 ? getClosedValueAverages(userAddress) : [],
     valueAverageKeys.size > 0 ? getOpenValueAverages(userAddress) : [],
-    limitOrderKeys.size > 0 ? getLimitOrdersWithTrades(userAddress) : [],
+    limitOrderKeys.size > 0 ? getClosedTriggers(userAddress) : [],
+    limitOrderKeys.size > 0 ? getOpenTriggers(userAddress) : [],
   ]);
 
   const dcas = [...closedDCAs, ...openDCAs].filter((dca) =>
@@ -217,7 +223,7 @@ async function getDeposits(
   const valueAverages = [...closedValueAverages, ...openValueAverages].filter(
     (va) => valueAverageKeys.has(va.valueAverageKey),
   );
-  const limitOrders = limitOrdersWithTrades.filter((order) =>
+  const limitOrders = [...closedTriggers, ...openTriggers].filter((order) =>
     limitOrderKeys.has(order.orderKey),
   );
 
@@ -257,7 +263,7 @@ async function getDeposits(
       amount: order.makingAmount,
       adjustedForDecimals: true,
     },
-    strategyType: "limit order",
+    strategyType: "trigger",
     strategyKey: order.orderKey,
     userAddress: userAddress,
     transactionSignature: order.openTx,
@@ -273,30 +279,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const valueAverageKeys = [
     ...new Set(url.searchParams.getAll("va")),
   ] as Address[];
-  const limitOrderKeys = [
-    ...new Set(url.searchParams.getAll("lo")),
+  const triggerKeys = [
+    ...new Set(url.searchParams.getAll("trigger")),
   ] as Address[];
 
-  const [dcaTrades, valueAverageTrades, limitOrderTrades, deposits] =
+  const [dcaTrades, valueAverageTrades, triggerTrades, deposits] =
     await Promise.all([
       dcaKeys.length > 0 ? getDCAFills(dcaKeys) : [],
       valueAverageKeys.length > 0 ? getValueAverageFills(valueAverageKeys) : [],
-      limitOrderKeys.length > 0
-        ? getLimitOrderTrades(userAddress, limitOrderKeys)
+      triggerKeys.length > 0
+        ? getTriggerOrderTrades(userAddress, triggerKeys)
         : [],
       dcaKeys.length > 0 ||
       valueAverageKeys.length > 0 ||
-      limitOrderKeys.length > 0
+      triggerKeys.length > 0
         ? getDeposits(
             userAddress,
             new Set(dcaKeys),
             new Set(valueAverageKeys),
-            new Set(limitOrderKeys),
+            new Set(triggerKeys),
           )
         : [],
     ]);
 
-  const allTrades = [...dcaTrades, ...valueAverageTrades, ...limitOrderTrades];
+  const allTrades = [...dcaTrades, ...valueAverageTrades, ...triggerTrades];
 
   const uniqueMintAddresses: Address[] = Array.from(
     new Set<Address>(
@@ -314,7 +320,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return {
     dcaKeys,
     valueAverageKeys,
-    limitOrderKeys,
+    triggerKeys,
     userAddress,
     events,
     mints,
@@ -714,7 +720,7 @@ function TransactionStrategyBadge({
 
   return (
     <Badge size="xs" variant="light" c="orange.1">
-      LO
+      TR
     </Badge>
   );
 }
@@ -746,14 +752,14 @@ type ChangeDisplayedTradesButtonProps = {
   userAddress: Address;
   dcaKeys: Address[];
   valueAverageKeys: Address[];
-  limitOrderKeys: Address[];
+  triggerKeys: Address[];
 };
 
 function ChangeDisplayedTradesButton({
   userAddress,
   dcaKeys,
   valueAverageKeys,
-  limitOrderKeys,
+  triggerKeys,
 }: ChangeDisplayedTradesButtonProps) {
   const navigation = useNavigation();
   const isLoading = navigation.state === "loading";
@@ -766,8 +772,13 @@ function ChangeDisplayedTradesButton({
       {valueAverageKeys.map((vaKey) => (
         <input key={vaKey} type="hidden" name="va" value={vaKey} />
       ))}
-      {limitOrderKeys.map((loKey) => (
-        <input key={loKey} type="hidden" name="lo" value={loKey} />
+      {triggerKeys.map((triggerKey) => (
+        <input
+          key={triggerKey}
+          type="hidden"
+          name="trigger"
+          value={triggerKey}
+        />
       ))}
 
       <Button
@@ -975,18 +986,18 @@ function DepositRow({ deposit, mints, tokenPrices }: DepositRowProps) {
 function TradeCountsTitle({
   dcaKeysCount,
   valueAverageKeysCount,
-  limitOrderKeysCount,
+  triggerKeysCount,
   tradesCount,
 }: {
   dcaKeysCount: number;
   valueAverageKeysCount: number;
-  limitOrderKeysCount: number;
+  triggerKeysCount: number;
   tradesCount: number;
 }) {
   const counts = [
     dcaKeysCount > 0 && `${dcaKeysCount} DCAs`,
     valueAverageKeysCount > 0 && `${valueAverageKeysCount} VAs`,
-    limitOrderKeysCount > 0 && `${limitOrderKeysCount} LOs`,
+    triggerKeysCount > 0 && `${triggerKeysCount} Triggers`,
   ].filter(Boolean);
 
   const countsDisplay = counts.reduce((acc, curr, i, arr) => {
@@ -1090,7 +1101,7 @@ export default function Trades() {
   const {
     dcaKeys,
     valueAverageKeys,
-    limitOrderKeys,
+    triggerKeys,
     userAddress,
     events,
     mints,
@@ -1136,7 +1147,7 @@ export default function Trades() {
   if (
     dcaKeys.length === 0 &&
     valueAverageKeys.length === 0 &&
-    limitOrderKeys.length === 0
+    triggerKeys.length === 0
   ) {
     return (
       <Stack gap="md">
@@ -1145,7 +1156,7 @@ export default function Trades() {
             userAddress={userAddress}
             dcaKeys={dcaKeys}
             valueAverageKeys={valueAverageKeys}
-            limitOrderKeys={limitOrderKeys}
+            triggerKeys={triggerKeys}
           />
           <Title order={3}>No trades selected</Title>
         </Group>
@@ -1170,12 +1181,12 @@ export default function Trades() {
             userAddress={userAddress}
             dcaKeys={dcaKeys}
             valueAverageKeys={valueAverageKeys}
-            limitOrderKeys={limitOrderKeys}
+            triggerKeys={triggerKeys}
           />
           <TradeCountsTitle
             dcaKeysCount={dcaKeys.length}
             valueAverageKeysCount={valueAverageKeys.length}
-            limitOrderKeysCount={limitOrderKeys.length}
+            triggerKeysCount={triggerKeys.length}
             tradesCount={trades.length}
           />
           <Group gap="lg">
