@@ -667,6 +667,10 @@ export default function Strategies() {
           <Stack align="flex-start" gap="xl">
             <input type="hidden" name="userAddress" value={address} />
 
+            {recurringOrders.length === 0 ? (
+              <Text fs="italic">No recurring orders found for {address}</Text>
+            ) : null}
+
             {Object.keys(groupedRecurringOrdersTime).length > 0 ? (
               <Stack gap="sm">
                 <Title order={4}>Recurring (Time)</Title>
@@ -685,28 +689,26 @@ export default function Strategies() {
                   ),
                 )}
               </Stack>
-            ) : (
-              <Text fs="italic">No Jupiter DCAs found for {address}</Text>
-            )}
+            ) : null}
 
-            {Object.keys(groupedValueAverages).length > 0 ? (
+            {Object.keys(groupedRecurringOrdersPrice).length > 0 ? (
               <Stack gap="sm">
-                <Title order={4}>VAs (Value Averages)</Title>
-                {Object.entries(groupedValueAverages).map(([key, vas]) => (
-                  <CheckboxGroup
-                    key={key}
-                    accountsWithType={{
-                      accounts: vas,
-                      type: "va",
-                    }}
-                    selectedKeys={allSelectedKeys}
-                    mints={mints}
-                  />
-                ))}
+                <Title order={4}>Recurring (Price)</Title>
+                {Object.entries(groupedRecurringOrdersPrice).map(
+                  ([key, orders]) => (
+                    <CheckboxGroup
+                      key={key}
+                      accountsWithType={{
+                        accounts: orders,
+                        type: "recurring",
+                      }}
+                      selectedKeys={allSelectedKeys}
+                      mints={mints}
+                    />
+                  ),
+                )}
               </Stack>
-            ) : (
-              <Text fs="italic">No Jupiter VAs found for {address}</Text>
-            )}
+            ) : null}
 
             {Object.keys(groupedTriggers).length > 0 ? (
               <Stack gap="sm">
