@@ -8,6 +8,8 @@ import {
   LimitOrderOrdersResponse,
   DCAFetchedAccount,
   ValueAverageFetchedAccount,
+  RecurringOrderFetchedAccount,
+  RecurringOrdersResponse,
 } from "./types";
 import { queryClient } from "./query-client";
 
@@ -34,6 +36,37 @@ export async function getClosedDCAs(
   });
 }
 
+async function getRecurringOrdersHistoryImpl(
+  address: Address,
+): Promise<RecurringOrderFetchedAccount[]> {
+  // Note that this API is paginated
+  let page = 1;
+  let totalPages = 1;
+  const orders: RecurringOrderFetchedAccount[] = [];
+
+  while (page <= totalPages) {
+    const response = await fetch(
+      `https://lite-api.jup.ag/recurring/v1/getRecurringOrders?user=${address}&orderStatus=history&recurringType=all&includeFailedTx=false&page=${page}`,
+    );
+    if (response.status >= 400) {
+      throw new Error("Error fetching past recurring orders from Jupiter");
+    }
+    const data = (await response.json()) as RecurringOrdersResponse;
+    orders.push(...data.all);
+    totalPages = data.totalPages;
+    page += 1;
+  }
+  return orders;
+}
+
+export async function getRecurringOrdersHistory(
+  address: Address,
+): Promise<RecurringOrderFetchedAccount[]> {
+  return queryClient.fetchQuery({
+    queryKey: ["recurringOrdersHistory", address],
+    queryFn: () => getRecurringOrdersHistoryImpl(address),
+  });
+}
 async function getOpenDCAsImpl(address: Address): Promise<DCAFetchedAccount[]> {
   const response = await fetch(
     `https://dca-api.jup.ag/user/${address}?status=${DCAStatus.OPEN}`,
@@ -104,7 +137,7 @@ export async function getOpenValueAverages(
 async function getClosedTriggersImpl(
   address: Address,
 ): Promise<TriggerFetchedAccount[]> {
-  //   // Note that this API is paginated
+  // Note that this API is paginated
   let page = 1;
   let totalPages = 1;
   const orders: TriggerFetchedAccount[] = [];

@@ -44,7 +44,7 @@ export type DCAFillData = {
   confirmedAt: number; // unix timestamp
   inputMint: Address;
   outputMint: Address;
-  inAmount: StringifiedNumber;
+  inDeposited: StringifiedNumber;
   outAmount: StringifiedNumber;
   fee: StringifiedNumber;
   txId: Signature;
@@ -56,6 +56,41 @@ export type FetchDCAFillsResponse = {
   data: {
     fills: DCAFillData[];
   };
+};
+
+export type RecurringOrdersResponse = {
+  all: RecurringOrderFetchedAccount[];
+  totalPages: number;
+  page: number;
+};
+
+// TODO: this can replace the LimitOrderTrade, same for all types now
+type JupiterTrade = {
+  confirmedAt: StringifiedDate;
+  inputMint: Address;
+  outputMint: Address;
+  /** Note: already adjusted for decimals */
+  inputAmount: StringifiedNumber;
+  /** Note: already adjusted for decimals */
+  outputAmount: StringifiedNumber;
+  /** Note: already adjusted for decimals */
+  feeAmount: StringifiedNumber;
+  orderKey: Address;
+  txId: Signature;
+};
+
+export type RecurringOrderFetchedAccount = {
+  recurringType: "time" | "price";
+  orderKey: Address;
+  inputMint: Address;
+  outputMint: Address;
+  inDeposited: StringifiedNumber;
+  outReceived: StringifiedNumber;
+  cycleFrequency: number;
+  inAmountPerCycle: StringifiedNumber;
+  openTx: Signature;
+  createdAt: StringifiedDate;
+  trades: JupiterTrade[];
 };
 
 export enum ValueAverageStatus {
