@@ -42,6 +42,7 @@ import {
   getClosedTriggers,
   getOpenTriggers,
   getRecurringOrdersHistory,
+  getRecurringOrdersActive,
 } from "../jupiter-api";
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
@@ -68,11 +69,9 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   ]);
 
   // Fetch sequentially from Jupiter API to avoid rate limiting
-  // Recurring covers both DCA (time) and value average (price)
+  // Recurring covers both what was previously DCA (time) and value average (price)
   const recurringOrdersHistory = await getRecurringOrdersHistory(address);
-  console.log(recurringOrdersHistory);
-
-  // recurringOrdersActive
+  const recurringOrdersActive = await getRecurringOrdersActive(address);
 
   // triggerOrdersHistory
 
@@ -88,6 +87,10 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
         order.inputMint,
         order.outputMint,
       ]),
+      ...recurringOrdersActive.flatMap((order) => [
+        order.inputMint,
+        order.outputMint,
+      ]),
       ...closedTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
       ...openTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
     ]),
@@ -95,6 +98,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   const mints = await getMintData(uniqueMintAddresses);
 
+  // TODO: rethink these query params? maybe just one param for all? since they're unique
   const dcaKeys = new Set(
     new URL(request.url).searchParams.getAll("dca") as Address[],
   );
@@ -108,6 +112,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   return {
     dcas: [...closedDCAs, ...openDCAs],
     recurringOrdersHistory,
+    recurringOrdersActive,
     valueAverages: [...closedValueAverages, ...openValueAverages],
     triggers: [...closedTriggers, ...openTriggers],
     selectedDcaKeys: dcaKeys,
@@ -271,12 +276,19 @@ function SingleItemCheckboxLabel({
   }
 
   if (type === "recurring") {
+    const isOpen = getIsOpen(accountWithType);
+
     return (
       <Group>
         <Text size="sm">
           {inputAmountWithSymbol} {"->"} {outputDisplay} • Started{" "}
           {friendlyDate} {friendlyTime}
         </Text>
+        {isOpen ? (
+          <Badge size="xs" variant="outline" c="green.1">
+            Open
+          </Badge>
+        ) : null}
       </Group>
     );
   }
@@ -577,10 +589,9 @@ export default function Strategies() {
   assertIsAddress(address);
 
   const {
-    dcas,
-    valueAverages,
     triggers,
     recurringOrdersHistory,
+    recurringOrdersActive,
     selectedDcaKeys,
     selectedValueAverageKeys,
     selectedTriggerKeys,
@@ -595,6 +606,10 @@ export default function Strategies() {
     ...recurringOrdersHistory.map((order) => ({
       ...order,
       status: "history" as const,
+    })),
+    ...recurringOrdersActive.map((order) => ({
+      ...order,
+      status: "active" as const,
     })),
   ];
 
@@ -625,16 +640,6 @@ export default function Strategies() {
       return acc;
     },
     {} as Record<string, RecurringOrderWithStatus[]>,
-  );
-
-  const groupedValueAverages = valueAverages.reduce(
-    (acc, va) => {
-      const key = `${va.inputMint}-${va.outputMint}`;
-      acc[key] ??= [];
-      acc[key].push(va);
-      return acc;
-    },
-    {} as Record<string, ValueAverageFetchedAccount[]>,
   );
 
   // Group triggers by input + output mint
