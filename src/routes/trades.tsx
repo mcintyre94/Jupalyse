@@ -854,7 +854,11 @@ function getTokenPrice(
   const timestamp = Math.floor(date.getTime() / 1000);
   const roundedTimestamp = roundTimestampToMinuteBoundary(timestamp);
   const key: FetchedTokenPriceKey = `${mintAddress}-${roundedTimestamp}`;
-  return tokenPrices[key];
+  const price = tokenPrices[key];
+  if (price === "missing") {
+    return undefined;
+  }
+  return price;
 }
 
 type DepositRowProps = {
@@ -953,8 +957,8 @@ function UsdPricesModal({
   }, [fetcher.state, fetcher.data, onClose]);
 
   const estimatedRequests = Object.values(tokenPricesToFetch).flat().length;
-  // Birdeye rate limits us to 100 requests per minute
-  const estimatedTimeMinutes = Math.ceil(estimatedRequests / 100);
+  // Birdeye rate limits us to 1 request per second
+  const estimatedTimeMinutes = Math.ceil(estimatedRequests / 60);
 
   return (
     <Modal opened={opened} onClose={onClose} title="Include USD prices">
@@ -1049,8 +1053,6 @@ export default function Trades() {
     () => getTokenPricesToFetch(events, alreadyFetchedTokenPrices),
     [events, alreadyFetchedTokenPrices],
   );
-
-  console.log({ alreadyFetchedTokenPrices, tokenPricesToFetch });
 
   const amountOfTokenPricesAlreadyFetched = Object.values(
     alreadyFetchedTokenPrices,
@@ -1213,5 +1215,3 @@ export default function Trades() {
     </>
   );
 }
-
-// TODO: add USD prices to CSV!

@@ -152,7 +152,11 @@ function getUsdPrice(
 ): number | undefined {
   const roundedTimestamp = roundTimestampToMinuteBoundary(timestamp);
   const key: FetchedTokenPriceKey = `${mintAddress}-${roundedTimestamp}`;
-  return fetchedTokenPrices[key];
+  const price = fetchedTokenPrices[key];
+  if (price === "missing") {
+    return undefined;
+  }
+  return price;
 }
 
 function getUsdAmount(

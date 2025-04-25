@@ -1,6 +1,7 @@
 import { Address } from "@solana/web3.js";
 import {
   Deposit,
+  FetchedTokenPrice,
   FetchedTokenPriceKey,
   FetchedTokenPrices,
   Timestamp,
@@ -35,7 +36,7 @@ export function getAlreadyFetchedTokenPrices(
   });
 
   for (const cachedTokenPrice of cachedTokenPrices) {
-    if (typeof cachedTokenPrice.state.data !== "number") {
+    if (!cachedTokenPrice.state.data) {
       continue;
     }
 
@@ -45,7 +46,7 @@ export function getAlreadyFetchedTokenPrices(
       continue;
     }
 
-    fetchedTokenPrices[key] = cachedTokenPrice.state.data;
+    fetchedTokenPrices[key] = cachedTokenPrice.state.data as FetchedTokenPrice;
   }
 
   return fetchedTokenPrices;
@@ -97,12 +98,23 @@ export function roundTimestampToMinuteBoundary(
   return timestamp - (timestamp % 60);
 }
 
+async function waitForSeconds(seconds: number, abortSignal: AbortSignal) {
+  await new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(resolve, seconds * 1000);
+    // If aborted during wait, clear timeout and reject
+    abortSignal?.addEventListener("abort", () => {
+      clearTimeout(timeoutId);
+      reject(new Error("Aborted"));
+    });
+  });
+}
+
 async function fetchTokenPriceAtTimestampImpl(
   tokenAddress: Address,
   timestamp: Timestamp,
   birdeyeApiKey: string,
   abortSignal: AbortSignal,
-): Promise<number> {
+): Promise<FetchedTokenPrice> {
   const timestampString = timestamp.toString();
 
   const queryParams = new URLSearchParams({
@@ -112,6 +124,13 @@ async function fetchTokenPriceAtTimestampImpl(
     time_from: timestampString,
     time_to: timestampString,
   });
+
+  if (abortSignal.aborted) {
+    throw new Error("Aborted");
+  }
+
+  // rate limit to 1 request per second
+  await waitForSeconds(1, abortSignal);
 
   const url = `https://public-api.birdeye.so/defi/history_price?${queryParams.toString()}`;
   let response = await fetch(url, {
@@ -123,24 +142,14 @@ async function fetchTokenPriceAtTimestampImpl(
   });
 
   if (response.status === 429) {
-    // Note that currently the x-ratelimit-reset header is not exposed to cors requests
-    // therefore we can't use it to optimise our wait
-    // we know they rate limit at 100 requests per minute
-    // so we just wait 1 minute before retrying
-    const waitTimeMs = 60 * 1000;
+    // If we get rate limited, wait an additional 10 seconds before retrying
+    const waitTimeSeconds = 10;
 
     console.log(
-      `Birdeye rate limit exceeded. Waiting ${waitTimeMs / 1000}s before retrying.`,
+      `Birdeye rate limit exceeded. Waiting ${waitTimeSeconds}s before retrying.`,
     );
 
-    await new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(resolve, waitTimeMs);
-      // If aborted during wait, clear timeout and reject
-      abortSignal?.addEventListener("abort", () => {
-        clearTimeout(timeoutId);
-        reject(new Error("Aborted"));
-      });
-    });
+    await waitForSeconds(waitTimeSeconds, abortSignal);
 
     // retry the request
     // If it fails again, we'll just handle it as an error
@@ -162,13 +171,15 @@ async function fetchTokenPriceAtTimestampImpl(
   const birdeyeHistoryPriceResponse: BirdeyeHistoryPriceResponse =
     await response.json();
 
-  if (
-    !birdeyeHistoryPriceResponse.success ||
-    birdeyeHistoryPriceResponse.data.items.length === 0
-  ) {
+  if (!birdeyeHistoryPriceResponse.success) {
     throw new Error(
       `Failed to fetch token price for ${tokenAddress} at rounded timestamp ${timestampString} (requested timestamp: ${timestampString}). Response: ${JSON.stringify(birdeyeHistoryPriceResponse)}`,
     );
+  }
+
+  if (birdeyeHistoryPriceResponse.data.items.length === 0) {
+    // Successful response, but no data available
+    return "missing";
   }
 
   return birdeyeHistoryPriceResponse.data.items[0].value;
@@ -179,7 +190,7 @@ async function fetchTokenPriceAtTimestamp(
   timestamp: Timestamp,
   birdeyeApiKey: string,
   abortSignal: AbortSignal,
-) {
+): Promise<FetchedTokenPrice> {
   return queryClient.ensureQueryData({
     queryKey: ["tokenPrices", tokenAddress, timestamp],
     queryFn: () =>
