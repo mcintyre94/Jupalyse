@@ -3,30 +3,6 @@ import { Address, Signature } from "@solana/web3.js";
 type StringifiedDate = string & { __brand: "StringifiedDate" };
 export type StringifiedNumber = string & { __brand: "StringifiedNumber" };
 
-export enum DCAStatus {
-  OPEN = 0,
-  CLOSED = 1,
-}
-
-export type DCAFetchedAccount = {
-  createdAt: StringifiedDate;
-  cycleFrequency: number;
-  dcaKey: Address;
-  inputMint: Address;
-  outputMint: Address;
-  inDeposited: StringifiedNumber;
-  inAmountPerCycle: StringifiedNumber;
-  status: DCAStatus;
-  openTxHash: Signature;
-};
-
-export type FetchDCAsResponse = {
-  ok: boolean;
-  data: {
-    dcaAccounts: DCAFetchedAccount[];
-  };
-};
-
 export type MintData = {
   address: Address;
   name: string;
@@ -39,26 +15,6 @@ export type FetchMintsResponse = {
   content: MintData[];
 };
 
-export type DCAFillData = {
-  userKey: Address;
-  confirmedAt: number; // unix timestamp
-  inputMint: Address;
-  outputMint: Address;
-  inDeposited: StringifiedNumber;
-  outAmount: StringifiedNumber;
-  fee: StringifiedNumber;
-  txId: Signature;
-  dcaKey: Address;
-};
-
-export type FetchDCAFillsResponse = {
-  ok: boolean;
-  data: {
-    fills: DCAFillData[];
-  };
-};
-
-// TODO: this can replace the LimitOrderTrade, same for all types now
 type JupiterTrade = {
   confirmedAt: StringifiedDate;
   inputMint: Address;
@@ -110,82 +66,6 @@ export type TriggerOrderFetchedAccount = {
 
 export type TriggerOrdersResponse = {
   orders: TriggerOrderFetchedAccount[];
-  totalPages: number;
-  page: number;
-};
-
-export enum ValueAverageStatus {
-  CLOSED = 0,
-  OPEN = 1,
-}
-
-export type ValueAverageFetchedAccount = {
-  createdAt: StringifiedDate;
-  valueAverageKey: Address;
-  inputMint: Address;
-  outputMint: Address;
-  inDeposited: StringifiedNumber;
-  inLeft: StringifiedNumber;
-  status: ValueAverageStatus;
-  supposedUsdcValue: StringifiedNumber;
-  openTxHash: Signature;
-};
-
-export type FetchValueAveragesResponse = {
-  ok: boolean;
-  data: {
-    valueAverageAccounts: ValueAverageFetchedAccount[];
-  };
-};
-
-export type ValueAverageFillData = {
-  userKey: Address;
-  confirmedAt: number; // unix timestamp
-  inputMint: Address;
-  outputMint: Address;
-  inputAmount: StringifiedNumber;
-  outputAmount: StringifiedNumber;
-  fee: StringifiedNumber;
-  txSignature: Signature;
-  valueAverageKey: Address;
-};
-
-export type FetchValueAverageFillsResponse = {
-  ok: boolean;
-  data: {
-    fills: ValueAverageFillData[];
-  };
-};
-
-type LimitOrderTrade = {
-  confirmedAt: StringifiedDate;
-  inputMint: Address;
-  outputMint: Address;
-  /** Note: already adjusted for decimals */
-  inputAmount: StringifiedNumber;
-  /** Note: already adjusted for decimals */
-  outputAmount: StringifiedNumber;
-  /** Note: already adjusted for decimals */
-  feeAmount: StringifiedNumber;
-  orderKey: Address;
-  txId: Signature;
-};
-
-export type TriggerFetchedAccount = {
-  orderKey: Address;
-  inputMint: Address;
-  outputMint: Address;
-  /** Note: already adjusted for decimals */
-  makingAmount: StringifiedNumber;
-  createdAt: StringifiedDate;
-  // TODO: waiting to find out more status values
-  status: "Completed" | "Cancelled";
-  openTx: Signature;
-  trades: LimitOrderTrade[];
-};
-
-export type LimitOrderOrdersResponse = {
-  orders: TriggerFetchedAccount[];
   totalPages: number;
   page: number;
 };
