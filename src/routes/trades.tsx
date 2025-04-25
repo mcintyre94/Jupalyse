@@ -953,8 +953,8 @@ function UsdPricesModal({
   }, [fetcher.state, fetcher.data, onClose]);
 
   const estimatedRequests = Object.values(tokenPricesToFetch).flat().length;
-  // Birdeye rate limits us to 100 requests per minute
-  const estimatedTimeMinutes = Math.ceil(estimatedRequests / 100);
+  // Birdeye rate limits us to 1 request per second
+  const estimatedTimeMinutes = Math.ceil(estimatedRequests / 60);
 
   return (
     <Modal opened={opened} onClose={onClose} title="Include USD prices">
