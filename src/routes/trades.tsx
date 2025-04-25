@@ -693,7 +693,7 @@ function ChangeDisplayedTradesButton({
   const isLoading = navigation.state === "loading";
 
   return (
-    <Form action={`/strategies/${userAddress}`}>
+    <Form action={`/orders/${userAddress}`}>
       {recurringKeys.map((recurringKey) => (
         <input key={recurringKey} type="hidden" name="o" value={recurringKey} />
       ))}
