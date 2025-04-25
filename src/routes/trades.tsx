@@ -854,7 +854,11 @@ function getTokenPrice(
   const timestamp = Math.floor(date.getTime() / 1000);
   const roundedTimestamp = roundTimestampToMinuteBoundary(timestamp);
   const key: FetchedTokenPriceKey = `${mintAddress}-${roundedTimestamp}`;
-  return tokenPrices[key];
+  const price = tokenPrices[key];
+  if (price === "missing") {
+    return undefined;
+  }
+  return price;
 }
 
 type DepositRowProps = {
@@ -1050,8 +1054,6 @@ export default function Trades() {
     [events, alreadyFetchedTokenPrices],
   );
 
-  console.log({ alreadyFetchedTokenPrices, tokenPricesToFetch });
-
   const amountOfTokenPricesAlreadyFetched = Object.values(
     alreadyFetchedTokenPrices,
   ).flat().length;
@@ -1213,5 +1215,3 @@ export default function Trades() {
     </>
   );
 }
-
-// TODO: add USD prices to CSV!

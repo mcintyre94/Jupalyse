@@ -110,6 +110,8 @@ export type TokenPricesToFetch = {
 
 export type FetchedTokenPriceKey = `${Address}-${Timestamp}`;
 
+export type FetchedTokenPrice = number | "missing";
+
 export type FetchedTokenPrices = {
-  [key in FetchedTokenPriceKey]: number;
+  [key in FetchedTokenPriceKey]: FetchedTokenPrice;
 };

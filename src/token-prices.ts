@@ -1,6 +1,7 @@
 import { Address } from "@solana/web3.js";
 import {
   Deposit,
+  FetchedTokenPrice,
   FetchedTokenPriceKey,
   FetchedTokenPrices,
   Timestamp,
@@ -35,7 +36,7 @@ export function getAlreadyFetchedTokenPrices(
   });
 
   for (const cachedTokenPrice of cachedTokenPrices) {
-    if (typeof cachedTokenPrice.state.data !== "number") {
+    if (!cachedTokenPrice.state.data) {
       continue;
     }
 
@@ -45,7 +46,7 @@ export function getAlreadyFetchedTokenPrices(
       continue;
     }
 
-    fetchedTokenPrices[key] = cachedTokenPrice.state.data;
+    fetchedTokenPrices[key] = cachedTokenPrice.state.data as FetchedTokenPrice;
   }
 
   return fetchedTokenPrices;
@@ -113,7 +114,7 @@ async function fetchTokenPriceAtTimestampImpl(
   timestamp: Timestamp,
   birdeyeApiKey: string,
   abortSignal: AbortSignal,
-): Promise<number> {
+): Promise<FetchedTokenPrice> {
   const timestampString = timestamp.toString();
 
   const queryParams = new URLSearchParams({
@@ -124,9 +125,6 @@ async function fetchTokenPriceAtTimestampImpl(
     time_to: timestampString,
   });
 
-  console.log("fetching token price at timestamp", timestampString, {
-    aborted: abortSignal.aborted,
-  });
   if (abortSignal.aborted) {
     throw new Error("Aborted");
   }
@@ -173,13 +171,15 @@ async function fetchTokenPriceAtTimestampImpl(
   const birdeyeHistoryPriceResponse: BirdeyeHistoryPriceResponse =
     await response.json();
 
-  if (
-    !birdeyeHistoryPriceResponse.success ||
-    birdeyeHistoryPriceResponse.data.items.length === 0
-  ) {
+  if (!birdeyeHistoryPriceResponse.success) {
     throw new Error(
       `Failed to fetch token price for ${tokenAddress} at rounded timestamp ${timestampString} (requested timestamp: ${timestampString}). Response: ${JSON.stringify(birdeyeHistoryPriceResponse)}`,
     );
+  }
+
+  if (birdeyeHistoryPriceResponse.data.items.length === 0) {
+    // Successful response, but no data available
+    return "missing";
   }
 
   return birdeyeHistoryPriceResponse.data.items[0].value;
@@ -190,7 +190,7 @@ async function fetchTokenPriceAtTimestamp(
   timestamp: Timestamp,
   birdeyeApiKey: string,
   abortSignal: AbortSignal,
-) {
+): Promise<FetchedTokenPrice> {
   return queryClient.ensureQueryData({
     queryKey: ["tokenPrices", tokenAddress, timestamp],
     queryFn: () =>
