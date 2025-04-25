@@ -195,15 +195,15 @@ export type AmountToDisplay = {
   adjustedForDecimals: boolean;
 };
 
-export type StrategyType = "dca" | "value average" | "trigger";
+export type OrderType = "recurring time" | "recurring price" | "trigger";
 
 export type Deposit = {
   kind: "deposit";
   date: Date;
   inputMint: Address;
   inputAmount: AmountToDisplay;
-  strategyType: StrategyType;
-  strategyKey: Address;
+  orderType: OrderType;
+  orderKey: Address;
   userAddress: Address;
   transactionSignature: Signature;
 };
@@ -216,8 +216,8 @@ export type Trade = {
   inputAmount: AmountToDisplay;
   outputAmount: AmountToDisplay;
   fee: AmountToDisplay;
-  strategyType: StrategyType;
-  strategyKey: Address;
+  orderType: OrderType;
+  orderKey: Address;
   userAddress: Address;
   transactionSignature: Signature;
 };
