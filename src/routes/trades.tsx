@@ -233,9 +233,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   ];
 
   const uniqueMintAddresses: Address[] = Array.from(
-    new Set<Address>(
-      trades.flatMap((trade) => [trade.inputMint, trade.outputMint]),
-    ),
+    new Set<Address>([
+      ...trades.flatMap((trade) => [trade.inputMint, trade.outputMint]),
+      ...deposits.map((deposit) => deposit.inputMint),
+    ]),
   );
   const mints = await getMintData(uniqueMintAddresses);
 
@@ -693,7 +694,7 @@ function ChangeDisplayedTradesButton({
   const isLoading = navigation.state === "loading";
 
   return (
-    <Form action={`/strategies/${userAddress}`}>
+    <Form action={`/orders/${userAddress}`}>
       {recurringKeys.map((recurringKey) => (
         <input key={recurringKey} type="hidden" name="o" value={recurringKey} />
       ))}

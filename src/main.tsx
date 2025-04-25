@@ -3,9 +3,7 @@ import * as ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Root from "./routes/root";
 import HomeRoute, { action as HomeAction } from "./routes/home";
-import StrategiesRoute, {
-  loader as StrategiesLoader,
-} from "./routes/strategies";
+import OrdersRoute, { loader as OrdersLoader } from "./routes/orders";
 import TradesRoute, { loader as TradesLoader } from "./routes/trades";
 import { action as TradesCsvAction } from "./routes/trades-csv";
 import { action as FetchUsdPricesAction } from "./routes/fetch-usd-prices";
@@ -26,9 +24,9 @@ const router = createBrowserRouter([
         action: HomeAction,
       },
       {
-        path: "/strategies/:address",
-        element: <StrategiesRoute />,
-        loader: StrategiesLoader,
+        path: "/orders/:address",
+        element: <OrdersRoute />,
+        loader: OrdersLoader,
       },
       {
         path: "/trades",

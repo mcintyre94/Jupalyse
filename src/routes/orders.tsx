@@ -491,8 +491,7 @@ type TriggerOrderWithOrderStatus = TriggerOrderFetchedAccount & {
   orderStatus: "history" | "active";
 };
 
-// TODO: should probably rename this to Orders
-export default function Strategies() {
+export default function Orders() {
   const params = useParams();
   const address = params.address as string;
   assertIsAddress(address);
@@ -576,7 +575,7 @@ export default function Strategies() {
       <Stack gap="xl" align="center">
         <Group gap="xl">
           <ChangeAddressButton />
-          <Title order={3}>Select items to display</Title>
+          <Title order={3}>Select orders to display</Title>
           <Space />
         </Group>
 
