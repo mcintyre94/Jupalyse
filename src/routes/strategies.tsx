@@ -19,28 +19,15 @@ import {
   useParams,
 } from "react-router-dom";
 import {
-  DCAFetchedAccount,
-  DCAStatus,
   MintData,
-  ValueAverageFetchedAccount,
-  ValueAverageStatus,
   RecurringOrderFetchedAccount,
   TriggerOrderFetchedAccount,
 } from "../types";
 import { useListState } from "@mantine/hooks";
-import {
-  numberDisplay,
-  numberDisplayAlreadyAdjustedForDecimals,
-} from "../number-display";
+import { numberDisplayAlreadyAdjustedForDecimals } from "../number-display";
 import { getMintData } from "../mint-data";
 import { IconArrowLeft } from "@tabler/icons-react";
 import {
-  getClosedDCAs,
-  getOpenDCAs,
-  getClosedValueAverages,
-  getOpenValueAverages,
-  getClosedTriggers,
-  getOpenTriggers,
   getRecurringOrdersHistory,
   getRecurringOrdersActive,
   getTriggerOrdersHistory,
@@ -54,22 +41,6 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     throw new Error("Invalid address");
   }
 
-  const [
-    closedDCAs,
-    openDCAs,
-    closedValueAverages,
-    openValueAverages,
-    closedTriggers,
-    openTriggers,
-  ] = await Promise.all([
-    getClosedDCAs(address),
-    getOpenDCAs(address),
-    getClosedValueAverages(address),
-    getOpenValueAverages(address),
-    getClosedTriggers(address),
-    getOpenTriggers(address),
-  ]);
-
   // Fetch sequentially from Jupiter API to avoid rate limiting
   // Recurring covers both what was previously DCA (time) and value average (price)
   const recurringOrdersHistory = await getRecurringOrdersHistory(address);
@@ -79,10 +50,6 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   const uniqueMintAddresses: Address[] = Array.from(
     new Set<Address>([
-      ...closedDCAs.flatMap((dca) => [dca.inputMint, dca.outputMint]),
-      ...openDCAs.flatMap((dca) => [dca.inputMint, dca.outputMint]),
-      ...closedValueAverages.flatMap((va) => [va.inputMint, va.outputMint]),
-      ...openValueAverages.flatMap((va) => [va.inputMint, va.outputMint]),
       ...recurringOrdersHistory.flatMap((order) => [
         order.inputMint,
         order.outputMint,
@@ -91,8 +58,6 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
         order.inputMint,
         order.outputMint,
       ]),
-      ...closedTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
-      ...openTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
       ...triggerOrdersHistory.flatMap((order) => [
         order.inputMint,
         order.outputMint,
@@ -118,11 +83,8 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   );
 
   return {
-    dcas: [...closedDCAs, ...openDCAs],
     recurringOrdersHistory,
     recurringOrdersActive,
-    valueAverages: [...closedValueAverages, ...openValueAverages],
-    triggers: [...closedTriggers, ...openTriggers],
     triggerOrdersHistory,
     triggerOrdersActive,
     selectedDcaKeys: dcaKeys,
@@ -133,8 +95,6 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 }
 
 type AccountWithType =
-  | { account: DCAFetchedAccount; type: "dca" }
-  | { account: ValueAverageFetchedAccount; type: "va" }
   | { account: RecurringOrderWithOrderStatus; type: "recurring" }
   | { account: TriggerOrderWithOrderStatus; type: "trigger" };
 
@@ -147,31 +107,14 @@ type AccountsWithType = {
     : never;
 }[AccountWithType["type"]];
 
-function getKey(accountWithType: AccountWithType) {
-  const { account, type } = accountWithType;
-  if (type === "dca") {
-    return account.dcaKey;
-  }
-  if (type === "va") {
-    return account.valueAverageKey;
-  }
-  return account.orderKey;
-}
-
 function getInputAmountWithSymbol(
   accountWithType: AccountWithType,
   inputMintData: MintData | undefined,
 ): String {
   const { account, type } = accountWithType;
 
-  if (type === "dca" || type === "va") {
-    if (inputMintData) {
-      return `${numberDisplay(account.inDeposited, inputMintData.decimals)} ${inputMintData.symbol}`;
-    }
-    return `Unknown Amount (${account.inputMint})`;
-  }
-
   if (type === "recurring") {
+    // inDeposited is already adjusted for decimals, but is not optimal for display to users
     const inputAmountDisplay = numberDisplayAlreadyAdjustedForDecimals(
       account.inDeposited,
     );
@@ -181,12 +124,15 @@ function getInputAmountWithSymbol(
     return `${inputAmountDisplay} (Unknown (${account.inputMint}))`;
   }
 
-  // limit order
-  if (inputMintData) {
-    // makingAmount is already adjusted for decimals, but is not optimal for display to users
-    return `${numberDisplayAlreadyAdjustedForDecimals(account.makingAmount)} ${inputMintData.symbol}`;
+  if (type === "trigger") {
+    if (inputMintData) {
+      // makingAmount is already adjusted for decimals, but is not optimal for display to users
+      return `${numberDisplayAlreadyAdjustedForDecimals(account.makingAmount)} ${inputMintData.symbol}`;
+    }
+    return `${account.makingAmount} (Unknown (${account.inputMint}))`;
   }
-  return `${account.makingAmount} (Unknown (${account.inputMint}))`;
+
+  throw new Error("Invalid account type");
 }
 
 function getOutputDisplay(
@@ -203,21 +149,17 @@ function getOutputDisplay(
   return `Unknown (${account.outputMint})`;
 }
 
-// TODO: also add trigger here - we have history and active there too
-function getIsOpen(
-  accountWithType: Extract<
-    AccountWithType,
-    { type: "dca" | "va" | "recurring" }
-  >,
-): boolean {
+function getIsOpen(accountWithType: AccountWithType): boolean {
   const { account, type } = accountWithType;
-  if (type === "dca") {
-    return account.status === DCAStatus.OPEN;
-  }
   if (type === "recurring") {
     return account.orderStatus === "active";
   }
-  return account.status === ValueAverageStatus.OPEN;
+
+  if (type === "trigger") {
+    return account.status === "Open";
+  }
+
+  throw new Error("Invalid account type");
 }
 
 function getTriggerStatusText(trigger: TriggerOrderFetchedAccount) {
@@ -279,24 +221,6 @@ function SingleItemCheckboxLabel({
   const friendlyDate = createdAtDate.toLocaleDateString();
   const friendlyTime = createdAtDate.toLocaleTimeString();
 
-  if (type === "dca" || type === "va") {
-    const isOpen = getIsOpen(accountWithType);
-
-    return (
-      <Group>
-        <Text size="sm">
-          {inputAmountWithSymbol} {"->"} {outputDisplay} • Started{" "}
-          {friendlyDate} {friendlyTime}
-        </Text>
-        {isOpen ? (
-          <Badge size="xs" variant="outline" c="green.1">
-            Open
-          </Badge>
-        ) : null}
-      </Group>
-    );
-  }
-
   if (type === "recurring") {
     const isOpen = getIsOpen(accountWithType);
 
@@ -342,7 +266,7 @@ function SingleItemCheckboxGroup({
   mints,
   accountWithType,
 }: SingleItemCheckboxGroupProps) {
-  const key = getKey(accountWithType);
+  const key = accountWithType.account.orderKey;
   const defaultChecked = getDefaultChecked(selectedKeys, key);
 
   return (
@@ -372,18 +296,6 @@ function getGroupLabel(
 function getFirstAccountWithType(
   accountsWithType: AccountsWithType,
 ): AccountWithType {
-  if (accountsWithType.type === "dca") {
-    return {
-      account: accountsWithType.accounts[0],
-      type: "dca",
-    };
-  }
-  if (accountsWithType.type === "va") {
-    return {
-      account: accountsWithType.accounts[0],
-      type: "va",
-    };
-  }
   if (accountsWithType.type === "recurring") {
     return {
       account: accountsWithType.accounts[0],
@@ -413,23 +325,6 @@ function CheckboxGroupItemLabel({
   const date = new Date(account.createdAt);
   const friendlyDate = date.toLocaleDateString();
   const friendlyTime = date.toLocaleTimeString();
-
-  if (type === "dca" || type === "va") {
-    const isOpen = getIsOpen(accountWithType);
-
-    return (
-      <Group align="center">
-        <Text size="sm">
-          {inputAmountWithSymbol} • Started {friendlyDate} {friendlyTime}
-        </Text>
-        {isOpen ? (
-          <Badge size="xs" variant="outline" c="green.1">
-            Open
-          </Badge>
-        ) : null}
-      </Group>
-    );
-  }
 
   if (type === "recurring") {
     const isOpen = getIsOpen(accountWithType);
@@ -496,7 +391,7 @@ function MultipleItemCheckboxGroup({
         (mint) => mint.address === account.inputMint,
       );
 
-      const key = getKey(accountWithType);
+      const key = account.orderKey;
 
       return {
         label: (
@@ -547,12 +442,7 @@ function MultipleItemCheckboxGroup({
 }
 
 type CheckboxGroupProps = BaseCheckboxGroupProps & {
-  accountsWithType:
-    | AccountsWithType
-    | { accounts: DCAFetchedAccount[]; type: "dca" }
-    | { accounts: ValueAverageFetchedAccount[]; type: "va" }
-    | { accounts: RecurringOrderWithOrderStatus[]; type: "recurring" }
-    | { accounts: TriggerOrderWithOrderStatus[]; type: "trigger" };
+  accountsWithType: AccountsWithType;
 };
 
 function CheckboxGroup({
@@ -610,6 +500,7 @@ type TriggerOrderWithOrderStatus = TriggerOrderFetchedAccount & {
   orderStatus: "history" | "active";
 };
 
+// TODO: should probably rename this to Orders
 export default function Strategies() {
   const params = useParams();
   const address = params.address as string;
