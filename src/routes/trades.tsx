@@ -233,9 +233,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   ];
 
   const uniqueMintAddresses: Address[] = Array.from(
-    new Set<Address>(
-      trades.flatMap((trade) => [trade.inputMint, trade.outputMint]),
-    ),
+    new Set<Address>([
+      ...trades.flatMap((trade) => [trade.inputMint, trade.outputMint]),
+      ...deposits.map((deposit) => deposit.inputMint),
+    ]),
   );
   const mints = await getMintData(uniqueMintAddresses);
 
