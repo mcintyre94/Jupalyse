@@ -19,27 +19,19 @@ import {
   useParams,
 } from "react-router-dom";
 import {
-  DCAFetchedAccount,
-  DCAStatus,
-  TriggerFetchedAccount,
   MintData,
-  ValueAverageFetchedAccount,
-  ValueAverageStatus,
+  RecurringOrderFetchedAccount,
+  TriggerOrderFetchedAccount,
 } from "../types";
 import { useListState } from "@mantine/hooks";
-import {
-  numberDisplay,
-  numberDisplayAlreadyAdjustedForDecimals,
-} from "../number-display";
+import { numberDisplayAlreadyAdjustedForDecimals } from "../number-display";
 import { getMintData } from "../mint-data";
 import { IconArrowLeft } from "@tabler/icons-react";
 import {
-  getClosedDCAs,
-  getOpenDCAs,
-  getClosedValueAverages,
-  getOpenValueAverages,
-  getClosedTriggers,
-  getOpenTriggers,
+  getRecurringOrdersHistory,
+  getRecurringOrdersActive,
+  getTriggerOrdersHistory,
+  getTriggerOrdersActive,
 } from "../jupiter-api";
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
@@ -49,76 +41,62 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     throw new Error("Invalid address");
   }
 
-  const [
-    closedDCAs,
-    openDCAs,
-    closedValueAverages,
-    openValueAverages,
-    closedTriggers,
-    openTriggers,
-  ] = await Promise.all([
-    getClosedDCAs(address),
-    getOpenDCAs(address),
-    getClosedValueAverages(address),
-    getOpenValueAverages(address),
-    getClosedTriggers(address),
-    getOpenTriggers(address),
-  ]);
+  // Fetch sequentially from Jupiter API to avoid rate limiting
+  // Recurring covers both what was previously DCA (time) and value average (price)
+  const recurringOrdersHistory = await getRecurringOrdersHistory(address);
+  const recurringOrdersActive = await getRecurringOrdersActive(address);
+  const triggerOrdersHistory = await getTriggerOrdersHistory(address);
+  const triggerOrdersActive = await getTriggerOrdersActive(address);
 
   const uniqueMintAddresses: Address[] = Array.from(
     new Set<Address>([
-      ...closedDCAs.flatMap((dca) => [dca.inputMint, dca.outputMint]),
-      ...openDCAs.flatMap((dca) => [dca.inputMint, dca.outputMint]),
-      ...closedValueAverages.flatMap((va) => [va.inputMint, va.outputMint]),
-      ...openValueAverages.flatMap((va) => [va.inputMint, va.outputMint]),
-      ...closedTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
-      ...openTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
+      ...recurringOrdersHistory.flatMap((order) => [
+        order.inputMint,
+        order.outputMint,
+      ]),
+      ...recurringOrdersActive.flatMap((order) => [
+        order.inputMint,
+        order.outputMint,
+      ]),
+      ...triggerOrdersHistory.flatMap((order) => [
+        order.inputMint,
+        order.outputMint,
+      ]),
+      ...triggerOrdersActive.flatMap((order) => [
+        order.inputMint,
+        order.outputMint,
+      ]),
     ]),
   );
 
   const mints = await getMintData(uniqueMintAddresses);
 
-  const dcaKeys = new Set(
-    new URL(request.url).searchParams.getAll("dca") as Address[],
-  );
-  const valueAverageKeys = new Set(
-    new URL(request.url).searchParams.getAll("va") as Address[],
-  );
-  const triggerKeys = new Set(
-    new URL(request.url).searchParams.getAll("trigger") as Address[],
+  const selectedOrderKeys = new Set(
+    new URL(request.url).searchParams.getAll("o") as Address[],
   );
 
   return {
-    dcas: [...closedDCAs, ...openDCAs],
-    valueAverages: [...closedValueAverages, ...openValueAverages],
-    triggers: [...closedTriggers, ...openTriggers],
-    selectedDcaKeys: dcaKeys,
-    selectedValueAverageKeys: valueAverageKeys,
-    selectedTriggerKeys: triggerKeys,
+    recurringOrdersHistory,
+    recurringOrdersActive,
+    triggerOrdersHistory,
+    triggerOrdersActive,
+    selectedOrderKeys,
     mints,
   };
 }
 
 type AccountWithType =
-  | { account: DCAFetchedAccount; type: "dca" }
-  | { account: ValueAverageFetchedAccount; type: "va" }
-  | { account: TriggerFetchedAccount; type: "trigger" };
+  | { account: RecurringOrderWithOrderStatus; type: "recurring" }
+  | { account: TriggerOrderWithOrderStatus; type: "trigger" };
 
-type AccountsWithType =
-  | { accounts: DCAFetchedAccount[]; type: "dca" }
-  | { accounts: ValueAverageFetchedAccount[]; type: "va" }
-  | { accounts: TriggerFetchedAccount[]; type: "trigger" };
-
-function getKey(accountWithType: AccountWithType) {
-  const { account, type } = accountWithType;
-  if (type === "dca") {
-    return account.dcaKey;
-  }
-  if (type === "va") {
-    return account.valueAverageKey;
-  }
-  return account.orderKey;
-}
+type AccountsWithType = {
+  [K in AccountWithType["type"]]: Extract<
+    AccountWithType,
+    { type: K }
+  > extends { account: infer A }
+    ? { accounts: A[]; type: K }
+    : never;
+}[AccountWithType["type"]];
 
 function getInputAmountWithSymbol(
   accountWithType: AccountWithType,
@@ -126,19 +104,26 @@ function getInputAmountWithSymbol(
 ): String {
   const { account, type } = accountWithType;
 
-  if (type === "dca" || type === "va") {
+  if (type === "recurring") {
+    // inDeposited is already adjusted for decimals, but is not optimal for display to users
+    const inputAmountDisplay = numberDisplayAlreadyAdjustedForDecimals(
+      account.inDeposited,
+    );
     if (inputMintData) {
-      return `${numberDisplay(account.inDeposited, inputMintData.decimals)} ${inputMintData.symbol}`;
+      return `${inputAmountDisplay} ${inputMintData.symbol}`;
     }
-    return `Unknown Amount (${account.inputMint})`;
+    return `${inputAmountDisplay} (Unknown (${account.inputMint}))`;
   }
 
-  // limit order
-  if (inputMintData) {
-    // makingAmount is already adjusted for decimals, but is not optimal for display to users
-    return `${numberDisplayAlreadyAdjustedForDecimals(account.makingAmount)} ${inputMintData.symbol}`;
+  if (type === "trigger") {
+    if (inputMintData) {
+      // makingAmount is already adjusted for decimals, but is not optimal for display to users
+      return `${numberDisplayAlreadyAdjustedForDecimals(account.makingAmount)} ${inputMintData.symbol}`;
+    }
+    return `${account.makingAmount} (Unknown (${account.inputMint}))`;
   }
-  return `${account.makingAmount} (Unknown (${account.inputMint}))`;
+
+  throw new Error("Invalid account type");
 }
 
 function getOutputDisplay(
@@ -155,17 +140,20 @@ function getOutputDisplay(
   return `Unknown (${account.outputMint})`;
 }
 
-function getIsOpen(
-  accountWithType: Extract<AccountWithType, { type: "dca" | "va" }>,
-): boolean {
+function getIsOpen(accountWithType: AccountWithType): boolean {
   const { account, type } = accountWithType;
-  if (type === "dca") {
-    return account.status === DCAStatus.OPEN;
+  if (type === "recurring") {
+    return account.orderStatus === "active";
   }
-  return account.status === ValueAverageStatus.OPEN;
+
+  if (type === "trigger") {
+    return account.status === "Open";
+  }
+
+  throw new Error("Invalid account type");
 }
 
-function getTriggerStatusText(trigger: TriggerFetchedAccount) {
+function getTriggerStatusText(trigger: TriggerOrderFetchedAccount) {
   const { status, trades } = trigger;
 
   if (status === "Completed") {
@@ -188,7 +176,16 @@ function getTriggerStatusText(trigger: TriggerFetchedAccount) {
     return `Cancelled after ${trades.length} trades`;
   }
 
-  // TODO: other status values
+  if (status === "Open") {
+    if (trades.length === 0) {
+      return "Open with no trades";
+    }
+    if (trades.length === 1) {
+      return "Open with 1 trade so far";
+    }
+    return `Open with ${trades.length} trades so far`;
+  }
+
   return undefined;
 }
 
@@ -215,7 +212,7 @@ function SingleItemCheckboxLabel({
   const friendlyDate = createdAtDate.toLocaleDateString();
   const friendlyTime = createdAtDate.toLocaleTimeString();
 
-  if (type === "dca" || type === "va") {
+  if (type === "recurring") {
     const isOpen = getIsOpen(accountWithType);
 
     return (
@@ -260,7 +257,7 @@ function SingleItemCheckboxGroup({
   mints,
   accountWithType,
 }: SingleItemCheckboxGroupProps) {
-  const key = getKey(accountWithType);
+  const key = accountWithType.account.orderKey;
   const defaultChecked = getDefaultChecked(selectedKeys, key);
 
   return (
@@ -290,16 +287,10 @@ function getGroupLabel(
 function getFirstAccountWithType(
   accountsWithType: AccountsWithType,
 ): AccountWithType {
-  if (accountsWithType.type === "dca") {
+  if (accountsWithType.type === "recurring") {
     return {
       account: accountsWithType.accounts[0],
-      type: "dca",
-    };
-  }
-  if (accountsWithType.type === "va") {
-    return {
-      account: accountsWithType.accounts[0],
-      type: "va",
+      type: "recurring",
     };
   }
   return {
@@ -326,7 +317,7 @@ function CheckboxGroupItemLabel({
   const friendlyDate = date.toLocaleDateString();
   const friendlyTime = date.toLocaleTimeString();
 
-  if (type === "dca" || type === "va") {
+  if (type === "recurring") {
     const isOpen = getIsOpen(accountWithType);
 
     return (
@@ -391,7 +382,7 @@ function MultipleItemCheckboxGroup({
         (mint) => mint.address === account.inputMint,
       );
 
-      const key = getKey(accountWithType);
+      const key = account.orderKey;
 
       return {
         label: (
@@ -442,10 +433,7 @@ function MultipleItemCheckboxGroup({
 }
 
 type CheckboxGroupProps = BaseCheckboxGroupProps & {
-  accountsWithType:
-    | { accounts: DCAFetchedAccount[]; type: "dca" }
-    | { accounts: ValueAverageFetchedAccount[]; type: "va" }
-    | { accounts: TriggerFetchedAccount[]; type: "trigger" };
+  accountsWithType: AccountsWithType;
 };
 
 function CheckboxGroup({
@@ -495,60 +483,93 @@ function ChangeAddressButton() {
   );
 }
 
+type RecurringOrderWithOrderStatus = RecurringOrderFetchedAccount & {
+  orderStatus: "history" | "active";
+};
+
+type TriggerOrderWithOrderStatus = TriggerOrderFetchedAccount & {
+  orderStatus: "history" | "active";
+};
+
+// TODO: should probably rename this to Orders
 export default function Strategies() {
   const params = useParams();
   const address = params.address as string;
   assertIsAddress(address);
 
   const {
-    dcas,
-    valueAverages,
-    triggers,
-    selectedDcaKeys,
-    selectedValueAverageKeys,
-    selectedTriggerKeys,
+    recurringOrdersHistory,
+    recurringOrdersActive,
+    triggerOrdersHistory,
+    triggerOrdersActive,
+    selectedOrderKeys,
     mints,
   } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
 
   const navigation = useNavigation();
   const isLoading = navigation.state === "loading";
 
-  // Group DCAs by input + output mint
-  const groupedDCAs = dcas.reduce(
-    (acc, dca) => {
-      const key = `${dca.inputMint}-${dca.outputMint}`;
-      acc[key] ??= [];
-      acc[key].push(dca);
-      return acc;
-    },
-    {} as Record<string, DCAFetchedAccount[]>,
+  const recurringOrders: RecurringOrderWithOrderStatus[] = [
+    ...recurringOrdersHistory.map((order) => ({
+      ...order,
+      orderStatus: "history" as const,
+    })),
+    ...recurringOrdersActive.map((order) => ({
+      ...order,
+      orderStatus: "active" as const,
+    })),
+  ];
+
+  const triggerOrders: TriggerOrderWithOrderStatus[] = [
+    ...triggerOrdersHistory.map((order) => ({
+      ...order,
+      orderStatus: "history" as const,
+    })),
+    ...triggerOrdersActive.map((order) => ({
+      ...order,
+      orderStatus: "active" as const,
+    })),
+  ];
+
+  const recurringOrdersTime = recurringOrders.filter(
+    (order) => order.recurringType === "time",
+  );
+  const recurringOrdersPrice = recurringOrders.filter(
+    (order) => order.recurringType === "price",
   );
 
-  const groupedValueAverages = valueAverages.reduce(
-    (acc, va) => {
-      const key = `${va.inputMint}-${va.outputMint}`;
+  // Group recurring time orders by input + output mint
+  const groupedRecurringOrdersTime = recurringOrdersTime.reduce(
+    (acc, order) => {
+      const key = `${order.inputMint}-${order.outputMint}`;
       acc[key] ??= [];
-      acc[key].push(va);
+      acc[key].push(order);
       return acc;
     },
-    {} as Record<string, ValueAverageFetchedAccount[]>,
+    {} as Record<string, RecurringOrderWithOrderStatus[]>,
   );
 
-  const groupedTriggers = triggers.reduce(
+  // Group recurring price orders by input + output mint
+  const groupedRecurringOrdersPrice = recurringOrdersPrice.reduce(
+    (acc, order) => {
+      const key = `${order.inputMint}-${order.outputMint}`;
+      acc[key] ??= [];
+      acc[key].push(order);
+      return acc;
+    },
+    {} as Record<string, RecurringOrderWithOrderStatus[]>,
+  );
+
+  // Group triggers by input + output mint
+  const groupedTriggers = triggerOrders.reduce(
     (acc, trigger) => {
       const key = `${trigger.inputMint}-${trigger.outputMint}`;
       acc[key] ??= [];
       acc[key].push(trigger);
       return acc;
     },
-    {} as Record<string, TriggerFetchedAccount[]>,
+    {} as Record<string, TriggerOrderWithOrderStatus[]>,
   );
-
-  const allSelectedKeys = new Set([
-    ...selectedDcaKeys,
-    ...selectedValueAverageKeys,
-    ...selectedTriggerKeys,
-  ]);
 
   return (
     <Container size="sm">
@@ -563,44 +584,47 @@ export default function Strategies() {
           <Stack align="flex-start" gap="xl">
             <input type="hidden" name="userAddress" value={address} />
 
-            {Object.keys(groupedDCAs).length > 0 ? (
-              <Stack gap="sm">
-                <Title order={4}>DCAs (Dollar-Cost Averages)</Title>
-                {Object.entries(groupedDCAs).map(([key, dcas]) => (
-                  <CheckboxGroup
-                    key={key}
-                    accountsWithType={{
-                      accounts: dcas,
-                      type: "dca",
-                    }}
-                    // Note: we pass allSelectedKeys so that if any trades in any strategies are pre-selected, we only select them
-                    selectedKeys={allSelectedKeys}
-                    mints={mints}
-                  />
-                ))}
-              </Stack>
-            ) : (
-              <Text fs="italic">No Jupiter DCAs found for {address}</Text>
-            )}
+            {recurringOrders.length === 0 ? (
+              <Text fs="italic">No recurring orders found for {address}</Text>
+            ) : null}
 
-            {Object.keys(groupedValueAverages).length > 0 ? (
+            {Object.keys(groupedRecurringOrdersTime).length > 0 ? (
               <Stack gap="sm">
-                <Title order={4}>VAs (Value Averages)</Title>
-                {Object.entries(groupedValueAverages).map(([key, vas]) => (
-                  <CheckboxGroup
-                    key={key}
-                    accountsWithType={{
-                      accounts: vas,
-                      type: "va",
-                    }}
-                    selectedKeys={allSelectedKeys}
-                    mints={mints}
-                  />
-                ))}
+                <Title order={4}>Recurring (Time)</Title>
+                {Object.entries(groupedRecurringOrdersTime).map(
+                  ([key, orders]) => (
+                    <CheckboxGroup
+                      key={key}
+                      accountsWithType={{
+                        accounts: orders,
+                        type: "recurring",
+                      }}
+                      selectedKeys={selectedOrderKeys}
+                      mints={mints}
+                    />
+                  ),
+                )}
               </Stack>
-            ) : (
-              <Text fs="italic">No Jupiter VAs found for {address}</Text>
-            )}
+            ) : null}
+
+            {Object.keys(groupedRecurringOrdersPrice).length > 0 ? (
+              <Stack gap="sm">
+                <Title order={4}>Recurring (Price)</Title>
+                {Object.entries(groupedRecurringOrdersPrice).map(
+                  ([key, orders]) => (
+                    <CheckboxGroup
+                      key={key}
+                      accountsWithType={{
+                        accounts: orders,
+                        type: "recurring",
+                      }}
+                      selectedKeys={selectedOrderKeys}
+                      mints={mints}
+                    />
+                  ),
+                )}
+              </Stack>
+            ) : null}
 
             {Object.keys(groupedTriggers).length > 0 ? (
               <Stack gap="sm">
@@ -612,7 +636,7 @@ export default function Strategies() {
                       accounts: triggers,
                       type: "trigger",
                     }}
-                    selectedKeys={allSelectedKeys}
+                    selectedKeys={selectedOrderKeys}
                     mints={mints}
                   />
                 ))}

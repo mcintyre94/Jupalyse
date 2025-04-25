@@ -4,10 +4,10 @@ import {
   MintData,
   Deposit,
   AmountToDisplay,
-  StrategyType,
   FetchedTokenPrices,
   Timestamp,
   FetchedTokenPriceKey,
+  OrderType,
 } from "../types";
 import { Address, Signature, StringifiedNumber } from "@solana/web3.js";
 import {
@@ -22,8 +22,6 @@ type InputData = {
   mints: MintData[];
   fetchedTokenPrices: FetchedTokenPrices;
 };
-
-type ShortStrategyType = "DCA" | "VA" | "Trigger";
 
 type CSVTradeDataRow = {
   kind: "trade";
@@ -43,8 +41,8 @@ type CSVTradeDataRow = {
   outAmountNet: StringifiedNumber;
   outAmountNetUsd: StringifiedNumber;
   transactionSignature: Signature;
-  strategyType: ShortStrategyType;
-  strategyKey: Address;
+  orderType: OrderType;
+  orderKey: Address;
 };
 
 type CSVDepositDataRow = {
@@ -56,8 +54,8 @@ type CSVDepositDataRow = {
   inAmount: StringifiedNumber;
   inAmountUsd: StringifiedNumber;
   transactionSignature: Signature;
-  strategyType: ShortStrategyType;
-  strategyKey: Address;
+  orderType: OrderType;
+  orderKey: Address;
 };
 
 export function convertToCSV(
@@ -84,8 +82,8 @@ export function convertToCSV(
     "outAmountNet",
     "outAmountNetUsd",
     "transactionSignature",
-    "strategyType",
-    "strategyKey",
+    "orderType",
+    "orderKey",
   ];
   const headerNames = [
     "Kind",
@@ -105,8 +103,8 @@ export function convertToCSV(
     "Out Amount (net)",
     "Out Amount (net) USD",
     "Transaction Signature",
-    "Strategy Type",
-    "Strategy Key",
+    "Order Type",
+    "Order Key",
   ];
   const csvRows = [headerNames.join(",")];
 
@@ -145,13 +143,6 @@ function getAmountBigDecimal(
   return amountToDisplay.adjustedForDecimals
     ? new BigDecimal(amountToDisplay.amount)
     : new BigDecimal(`${amountToDisplay.amount}E-${decimals}`);
-}
-
-function getShortStrategyType(strategyType: StrategyType): ShortStrategyType {
-  if (strategyType === "dca") return "DCA";
-  if (strategyType === "value average") return "VA";
-  if (strategyType === "trigger") return "Trigger";
-  throw new Error(`Unknown strategy type: ${strategyType}`);
 }
 
 function getUsdPrice(
@@ -203,18 +194,18 @@ function csvDataForTrade(
   if (outputMintData || trade.outputAmount.adjustedForDecimals) {
     const decimals = outputMintData?.decimals ?? 0;
 
-    const outputAmountBigDecimal = getAmountBigDecimal(
+    const outputAmountNetBigDecimal = getAmountBigDecimal(
       trade.outputAmount,
       decimals,
     );
 
     const outputFeeBigDecimal = getAmountBigDecimal(trade.fee, decimals);
 
-    const outputAmountNetBigDecimal =
-      outputAmountBigDecimal.subtract(outputFeeBigDecimal);
+    const outputAmountGrossBigDecimal =
+      outputAmountNetBigDecimal.add(outputFeeBigDecimal);
 
     outputAmountFormatted =
-      outputAmountBigDecimal.getPrettyValue() as StringifiedNumber;
+      outputAmountGrossBigDecimal.getPrettyValue() as StringifiedNumber;
     outputAmountFeeFormatted =
       outputFeeBigDecimal.getPrettyValue() as StringifiedNumber;
     outputAmountNetFormatted =
@@ -271,8 +262,8 @@ function csvDataForTrade(
     outAmountNet: outputAmountNetFormatted as StringifiedNumber,
     outAmountNetUsd: outAmountNetUsd as StringifiedNumber,
     transactionSignature: trade.transactionSignature,
-    strategyType: getShortStrategyType(trade.strategyType),
-    strategyKey: trade.strategyKey,
+    orderType: trade.orderType,
+    orderKey: trade.orderKey,
   };
 }
 
@@ -313,8 +304,8 @@ function csvDataForDeposit(
     inAmount: inputAmountFormatted as StringifiedNumber,
     inAmountUsd: inAmountUsd as StringifiedNumber,
     transactionSignature: deposit.transactionSignature,
-    strategyType: getShortStrategyType(deposit.strategyType),
-    strategyKey: deposit.strategyKey,
+    orderType: deposit.orderType,
+    orderKey: deposit.orderKey,
   };
 }
 

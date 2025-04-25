@@ -8,15 +8,15 @@ import {
 import {
   AmountToDisplay,
   Deposit,
-  FetchDCAFillsResponse,
   FetchedTokenPriceKey,
   FetchedTokenPrices,
-  FetchValueAverageFillsResponse,
   MintData,
-  StrategyType,
+  OrderType,
+  RecurringOrderFetchedAccount,
   StringifiedNumber,
   TokenPricesToFetch,
   Trade,
+  TriggerOrderFetchedAccount,
 } from "../types";
 import { Address } from "@solana/web3.js";
 import { getMintData } from "../mint-data";
@@ -64,13 +64,11 @@ import {
   useState,
 } from "react";
 import {
-  getClosedTriggers,
-  getClosedValueAverages,
-  getOpenDCAs,
-  getOpenTriggers,
-  getOpenValueAverages,
+  getRecurringOrdersActive,
+  getRecurringOrdersHistory,
+  getTriggerOrdersActive,
+  getTriggerOrdersHistory,
 } from "../jupiter-api";
-import { getClosedDCAs } from "../jupiter-api";
 import { toSvg } from "jdenticon";
 import { useDisclosure } from "@mantine/hooks";
 import {
@@ -79,183 +77,55 @@ import {
   roundTimestampToMinuteBoundary,
 } from "../token-prices";
 
-async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
-  const responses = await Promise.all(
-    dcaKeys.map(async (dcaKey) => {
-      const response = await fetch(
-        `https://dca-api.jup.ag/dca/${dcaKey}/fills`,
-      );
-      const fillResponse = (await response.json()) as FetchDCAFillsResponse;
-      return fillResponse.data.fills;
-    }),
+async function getSelectedRecurringOrders(
+  userAddress: Address,
+  recurringKeys: Address[],
+): Promise<RecurringOrderFetchedAccount[]> {
+  const recurringOrdersHistory = await getRecurringOrdersHistory(userAddress);
+  const recurringOrdersActive = await getRecurringOrdersActive(userAddress);
+  const keysSet = new Set(recurringKeys);
+  return [...recurringOrdersHistory, ...recurringOrdersActive].filter((order) =>
+    keysSet.has(order.orderKey),
   );
-  return responses.flat().map((fill) => {
-    return {
-      kind: "trade",
-      date: new Date(fill.confirmedAt * 1000),
-      inputMint: fill.inputMint,
-      outputMint: fill.outputMint,
-      inputAmount: {
-        amount: fill.inAmount,
-        adjustedForDecimals: false,
-      },
-      outputAmount: {
-        amount: fill.outAmount,
-        adjustedForDecimals: false,
-      },
-      fee: {
-        amount: fill.fee,
-        adjustedForDecimals: false,
-      },
-      txSignature: fill.txId,
-      strategyType: "dca",
-      strategyKey: fill.dcaKey,
-      userAddress: fill.userKey,
-      transactionSignature: fill.txId,
-    };
-  });
 }
 
-async function getValueAverageFills(
-  valueAverageKeys: Address[],
-): Promise<Trade[]> {
-  const responses = await Promise.all(
-    valueAverageKeys.map(async (valueAverageKey) => {
-      const response = await fetch(
-        `https://va.jup.ag/value-averages/${valueAverageKey}/fills`,
-      );
-      const fillResponse =
-        (await response.json()) as FetchValueAverageFillsResponse;
-      return fillResponse.data.fills;
-    }),
-  );
-  return responses.flat().map((fill) => {
-    return {
-      kind: "trade",
-      date: new Date(fill.confirmedAt * 1000),
-      inputMint: fill.inputMint,
-      outputMint: fill.outputMint,
-      inputAmount: {
-        amount: fill.inputAmount,
-        adjustedForDecimals: false,
-      },
-      outputAmount: {
-        amount: fill.outputAmount,
-        adjustedForDecimals: false,
-      },
-      fee: {
-        amount: fill.fee,
-        adjustedForDecimals: false,
-      },
-      txSignature: fill.txSignature,
-      strategyType: "value average",
-      strategyKey: fill.valueAverageKey,
-      userAddress: fill.userKey,
-      transactionSignature: fill.txSignature,
-    };
-  });
-}
-
-async function getTriggerOrderTrades(
+async function getSelectedTriggerOrders(
   userAddress: Address,
   triggerKeys: Address[],
-): Promise<Trade[]> {
-  // Triggers are fetched by user address, so fetch them all (cached with react-query),
-  // then filter to only those selected
-  const [closedTriggers, openTriggers] = await Promise.all([
-    getClosedTriggers(userAddress),
-    getOpenTriggers(userAddress),
-  ]);
-  const limitOrderKeysSet = new Set(triggerKeys);
-  const triggerOrderTrades = [...closedTriggers, ...openTriggers]
-    .filter((order) => limitOrderKeysSet.has(order.orderKey))
-    .flatMap((order) => order.trades);
+): Promise<TriggerOrderFetchedAccount[]> {
+  const triggerOrdersHistory = await getTriggerOrdersHistory(userAddress);
+  const triggerOrdersActive = await getTriggerOrdersActive(userAddress);
+  const keysSet = new Set(triggerKeys);
+  return [...triggerOrdersHistory, ...triggerOrdersActive].filter((order) =>
+    keysSet.has(order.orderKey),
+  );
+}
 
-  return triggerOrderTrades.map((trade) => ({
-    kind: "trade",
-    date: new Date(trade.confirmedAt),
-    inputMint: trade.inputMint,
-    outputMint: trade.outputMint,
+function makeDepositsForRecurringOrders(
+  orders: RecurringOrderFetchedAccount[],
+  userAddress: Address,
+): Deposit[] {
+  return orders.map((order) => ({
+    kind: "deposit",
+    date: new Date(order.createdAt),
+    inputMint: order.inputMint,
     inputAmount: {
-      amount: trade.inputAmount,
+      amount: order.inDeposited,
       adjustedForDecimals: true,
     },
-    outputAmount: {
-      amount: trade.outputAmount,
-      adjustedForDecimals: true,
-    },
-    fee: {
-      amount: trade.feeAmount,
-      adjustedForDecimals: true,
-    },
-    strategyType: "trigger",
-    strategyKey: trade.orderKey,
+    orderType:
+      order.recurringType === "time" ? "recurring time" : "recurring price",
+    orderKey: order.orderKey,
     userAddress,
-    transactionSignature: trade.txId,
+    transactionSignature: order.openTx,
   }));
 }
 
-async function getDeposits(
+function makeDepositsForTriggerOrders(
+  orders: TriggerOrderFetchedAccount[],
   userAddress: Address,
-  dcaKeys: Set<Address>,
-  valueAverageKeys: Set<Address>,
-  limitOrderKeys: Set<Address>,
-): Promise<Deposit[]> {
-  const [
-    closedDCAs,
-    openDCAs,
-    closedValueAverages,
-    openValueAverages,
-    closedTriggers,
-    openTriggers,
-  ] = await Promise.all([
-    dcaKeys.size > 0 ? getClosedDCAs(userAddress) : [],
-    dcaKeys.size > 0 ? getOpenDCAs(userAddress) : [],
-    valueAverageKeys.size > 0 ? getClosedValueAverages(userAddress) : [],
-    valueAverageKeys.size > 0 ? getOpenValueAverages(userAddress) : [],
-    limitOrderKeys.size > 0 ? getClosedTriggers(userAddress) : [],
-    limitOrderKeys.size > 0 ? getOpenTriggers(userAddress) : [],
-  ]);
-
-  const dcas = [...closedDCAs, ...openDCAs].filter((dca) =>
-    dcaKeys.has(dca.dcaKey),
-  );
-  const valueAverages = [...closedValueAverages, ...openValueAverages].filter(
-    (va) => valueAverageKeys.has(va.valueAverageKey),
-  );
-  const limitOrders = [...closedTriggers, ...openTriggers].filter((order) =>
-    limitOrderKeys.has(order.orderKey),
-  );
-
-  const dcaDeposits: Deposit[] = dcas.map((dca) => ({
-    kind: "deposit",
-    date: new Date(dca.createdAt),
-    inputMint: dca.inputMint,
-    inputAmount: {
-      amount: dca.inDeposited,
-      adjustedForDecimals: false,
-    },
-    strategyType: "dca",
-    strategyKey: dca.dcaKey,
-    userAddress: userAddress,
-    transactionSignature: dca.openTxHash,
-  }));
-
-  const valueAverageDeposits: Deposit[] = valueAverages.map((va) => ({
-    kind: "deposit",
-    date: new Date(va.createdAt),
-    inputMint: va.inputMint,
-    inputAmount: {
-      amount: va.inDeposited,
-      adjustedForDecimals: false,
-    },
-    strategyType: "value average",
-    strategyKey: va.valueAverageKey,
-    userAddress: userAddress,
-    transactionSignature: va.openTxHash,
-  }));
-
-  const limitOrderDeposits: Deposit[] = limitOrders.map((order) => ({
+): Deposit[] {
+  return orders.map((order) => ({
     kind: "deposit",
     date: new Date(order.createdAt),
     inputMint: order.inputMint,
@@ -263,63 +133,120 @@ async function getDeposits(
       amount: order.makingAmount,
       adjustedForDecimals: true,
     },
-    strategyType: "trigger",
-    strategyKey: order.orderKey,
-    userAddress: userAddress,
+    orderType: "trigger",
+    orderKey: order.orderKey,
+    userAddress,
     transactionSignature: order.openTx,
   }));
+}
 
-  return [...dcaDeposits, ...valueAverageDeposits, ...limitOrderDeposits];
+function makeTradesForRecurringOrders(
+  orders: RecurringOrderFetchedAccount[],
+  userAddress: Address,
+): Trade[] {
+  return orders.flatMap((order) =>
+    order.trades.map((trade) => ({
+      kind: "trade",
+      date: new Date(trade.confirmedAt),
+      inputMint: trade.inputMint,
+      outputMint: trade.outputMint,
+      inputAmount: {
+        amount: trade.inputAmount,
+        adjustedForDecimals: true,
+      },
+      outputAmount: {
+        amount: trade.outputAmount,
+        adjustedForDecimals: true,
+      },
+      fee: {
+        amount: trade.feeAmount,
+        adjustedForDecimals: true,
+      },
+      orderType:
+        order.recurringType === "time" ? "recurring time" : "recurring price",
+      orderKey: order.orderKey,
+      userAddress,
+      transactionSignature: trade.txId,
+    })),
+  );
+}
+
+function makeTradesForTriggerOrders(
+  orders: TriggerOrderFetchedAccount[],
+  userAddress: Address,
+): Trade[] {
+  return orders.flatMap((order) =>
+    order.trades.map((trade) => ({
+      kind: "trade",
+      date: new Date(trade.confirmedAt),
+      inputMint: trade.inputMint,
+      outputMint: trade.outputMint,
+      inputAmount: {
+        amount: trade.inputAmount,
+        adjustedForDecimals: true,
+      },
+      outputAmount: {
+        amount: trade.outputAmount,
+        adjustedForDecimals: true,
+      },
+      fee: {
+        amount: trade.feeAmount,
+        adjustedForDecimals: true,
+      },
+      orderType: "trigger",
+      orderKey: order.orderKey,
+      userAddress,
+      transactionSignature: trade.txId,
+    })),
+  );
 }
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
+
   const userAddress = url.searchParams.get("userAddress") as Address;
-  const dcaKeys = [...new Set(url.searchParams.getAll("dca"))] as Address[];
-  const valueAverageKeys = [
-    ...new Set(url.searchParams.getAll("va")),
+
+  const recurringKeys = [
+    ...new Set(url.searchParams.getAll("recurring")),
   ] as Address[];
   const triggerKeys = [
     ...new Set(url.searchParams.getAll("trigger")),
   ] as Address[];
 
-  const [dcaTrades, valueAverageTrades, triggerTrades, deposits] =
-    await Promise.all([
-      dcaKeys.length > 0 ? getDCAFills(dcaKeys) : [],
-      valueAverageKeys.length > 0 ? getValueAverageFills(valueAverageKeys) : [],
-      triggerKeys.length > 0
-        ? getTriggerOrderTrades(userAddress, triggerKeys)
-        : [],
-      dcaKeys.length > 0 ||
-      valueAverageKeys.length > 0 ||
-      triggerKeys.length > 0
-        ? getDeposits(
-            userAddress,
-            new Set(dcaKeys),
-            new Set(valueAverageKeys),
-            new Set(triggerKeys),
-          )
-        : [],
-    ]);
+  const recurringOrders = await getSelectedRecurringOrders(
+    userAddress,
+    recurringKeys,
+  );
+  const triggerOrders = await getSelectedTriggerOrders(
+    userAddress,
+    triggerKeys,
+  );
 
-  const allTrades = [...dcaTrades, ...valueAverageTrades, ...triggerTrades];
+  const deposits = [
+    ...makeDepositsForRecurringOrders(recurringOrders, userAddress),
+    ...makeDepositsForTriggerOrders(triggerOrders, userAddress),
+  ];
+
+  const trades = [
+    ...makeTradesForRecurringOrders(recurringOrders, userAddress),
+    ...makeTradesForTriggerOrders(triggerOrders, userAddress),
+  ];
 
   const uniqueMintAddresses: Address[] = Array.from(
     new Set<Address>(
-      allTrades.flatMap((fill) => [fill.inputMint, fill.outputMint]),
+      trades.flatMap((trade) => [trade.inputMint, trade.outputMint]),
     ),
   );
   const mints = await getMintData(uniqueMintAddresses);
 
-  const events = [...deposits, ...allTrades].sort(
+  const events = [...deposits, ...trades].sort(
     (a, b) => a.date.getTime() - b.date.getTime(),
   );
 
   const storedBirdeyeApiKey = localStorage.getItem("birdeyeApiKey");
 
   return {
-    dcaKeys,
-    valueAverageKeys,
+    recurringKeys,
     triggerKeys,
     userAddress,
     events,
@@ -697,68 +624,69 @@ function TransactionEventTypeBadge({
   );
 }
 
-function TransactionStrategyBadge({
-  strategyType,
-}: {
-  strategyType: StrategyType;
-}) {
-  if (strategyType === "dca") {
+function TransactionOrderTypeBadge({ orderType }: { orderType: OrderType }) {
+  if (orderType === "recurring time") {
     return (
-      <Badge size="xs" variant="light" c="green.1">
-        DCA
-      </Badge>
+      <Tooltip label="Recurring (Time)">
+        <Badge size="xs" variant="light" c="green.1">
+          RT
+        </Badge>
+      </Tooltip>
     );
   }
 
-  if (strategyType === "value average") {
+  if (orderType === "recurring price") {
     return (
-      <Badge size="xs" variant="light" c="blue.1">
-        VA
-      </Badge>
+      <Tooltip label="Recurring (Price)">
+        <Badge size="xs" variant="light" c="blue.1">
+          RP
+        </Badge>
+      </Tooltip>
     );
   }
-
-  return (
-    <Badge size="xs" variant="light" c="orange.1">
-      TR
-    </Badge>
-  );
+  if (orderType === "trigger") {
+    return (
+      <Tooltip label="Trigger">
+        <Badge size="xs" variant="light" c="orange.1">
+          T
+        </Badge>
+      </Tooltip>
+    );
+  }
 }
 
-function StrategyKeyIcon({ strategyKey }: { strategyKey: Address }) {
+function OrderKeyIcon({ orderKey }: { orderKey: Address }) {
   const size = 24;
-  const svg = useMemo(() => toSvg(strategyKey, size), [strategyKey, size]);
+  const svg = useMemo(() => toSvg(orderKey, size), [orderKey, size]);
   return <Box w={size} h={size} dangerouslySetInnerHTML={{ __html: svg }} />;
 }
 
 type TransactionEventCellProps = {
-  strategyType: StrategyType;
-  strategyKey: Address;
+  orderType: Trade["orderType"];
+  orderKey: Address;
 };
 
 function TransactionEventCell({
-  strategyType,
-  strategyKey,
+  orderType,
+  orderKey,
 }: TransactionEventCellProps) {
   return (
     <Group maw={120} justify="space-between">
-      <TransactionStrategyBadge strategyType={strategyType} />
-      <StrategyKeyIcon strategyKey={strategyKey} />
+      <TransactionOrderTypeBadge orderType={orderType} />
+      <OrderKeyIcon orderKey={orderKey} />
     </Group>
   );
 }
 
 type ChangeDisplayedTradesButtonProps = {
   userAddress: Address;
-  dcaKeys: Address[];
-  valueAverageKeys: Address[];
+  recurringKeys: Address[];
   triggerKeys: Address[];
 };
 
 function ChangeDisplayedTradesButton({
   userAddress,
-  dcaKeys,
-  valueAverageKeys,
+  recurringKeys,
   triggerKeys,
 }: ChangeDisplayedTradesButtonProps) {
   const navigation = useNavigation();
@@ -766,19 +694,11 @@ function ChangeDisplayedTradesButton({
 
   return (
     <Form action={`/strategies/${userAddress}`}>
-      {dcaKeys.map((dcaKey) => (
-        <input key={dcaKey} type="hidden" name="dca" value={dcaKey} />
-      ))}
-      {valueAverageKeys.map((vaKey) => (
-        <input key={vaKey} type="hidden" name="va" value={vaKey} />
+      {recurringKeys.map((recurringKey) => (
+        <input key={recurringKey} type="hidden" name="o" value={recurringKey} />
       ))}
       {triggerKeys.map((triggerKey) => (
-        <input
-          key={triggerKey}
-          type="hidden"
-          name="trigger"
-          value={triggerKey}
-        />
+        <input key={triggerKey} type="hidden" name="o" value={triggerKey} />
       ))}
 
       <Button
@@ -798,7 +718,7 @@ function adjustOutputAmountForFee(
   feeToDisplay: AmountToDisplay,
   subtractFee: boolean,
 ): AmountToDisplay {
-  if (!subtractFee) {
+  if (subtractFee) {
     return outputAmountToDisplay;
   }
 
@@ -814,17 +734,18 @@ function adjustOutputAmountForFee(
     throw new Error("Output and fee must have the same adjustedForDecimals");
   }
 
+  // If not subtracting fee, add the fee to the output amount
   if (outputAdjustedForDecimals) {
     return {
       amount: new BigDecimal(outputAmount)
-        .subtract(new BigDecimal(fee))
+        .add(new BigDecimal(fee))
         .getValue() as StringifiedNumber,
       adjustedForDecimals: true,
     };
   } else {
     return {
       amount: (
-        BigInt(outputAmount) - BigInt(fee)
+        BigInt(outputAmount) + BigInt(fee)
       ).toString() as StringifiedNumber,
       adjustedForDecimals: false,
     };
@@ -880,8 +801,8 @@ function TradeRow({
     <Table.Tr key={trade.transactionSignature}>
       <Table.Td>
         <TransactionEventCell
-          strategyType={trade.strategyType}
-          strategyKey={trade.strategyKey}
+          orderType={trade.orderType}
+          orderKey={trade.orderKey}
         />
       </Table.Td>
       <Table.Td style={{ width: "1%" }}>
@@ -958,8 +879,8 @@ function DepositRow({ deposit, mints, tokenPrices }: DepositRowProps) {
     <Table.Tr key={deposit.transactionSignature}>
       <Table.Td>
         <TransactionEventCell
-          strategyType={deposit.strategyType}
-          strategyKey={deposit.strategyKey}
+          orderType={deposit.orderType}
+          orderKey={deposit.orderKey}
         />
       </Table.Td>
       <Table.Td>
@@ -984,19 +905,16 @@ function DepositRow({ deposit, mints, tokenPrices }: DepositRowProps) {
 }
 
 function TradeCountsTitle({
-  dcaKeysCount,
-  valueAverageKeysCount,
+  recurringKeysCount,
   triggerKeysCount,
   tradesCount,
 }: {
-  dcaKeysCount: number;
-  valueAverageKeysCount: number;
+  recurringKeysCount: number;
   triggerKeysCount: number;
   tradesCount: number;
 }) {
   const counts = [
-    dcaKeysCount > 0 && `${dcaKeysCount} DCAs`,
-    valueAverageKeysCount > 0 && `${valueAverageKeysCount} VAs`,
+    recurringKeysCount > 0 && `${recurringKeysCount} Recurring Orders`,
     triggerKeysCount > 0 && `${triggerKeysCount} Triggers`,
   ].filter(Boolean);
 
@@ -1099,8 +1017,7 @@ function UsdPricesModal({
 
 export default function Trades() {
   const {
-    dcaKeys,
-    valueAverageKeys,
+    recurringKeys,
     triggerKeys,
     userAddress,
     events,
@@ -1117,7 +1034,7 @@ export default function Trades() {
     );
   }, [rateType]);
 
-  const [subtractFee, setSubtractFee] = useState(false);
+  const [subtractFee, setSubtractFee] = useState(true);
 
   const [
     usdPricesModalOpened,
@@ -1144,18 +1061,13 @@ export default function Trades() {
     hasAlreadyFetchedAnyTokenPrices,
   );
 
-  if (
-    dcaKeys.length === 0 &&
-    valueAverageKeys.length === 0 &&
-    triggerKeys.length === 0
-  ) {
+  if (recurringKeys.length === 0 && triggerKeys.length === 0) {
     return (
       <Stack gap="md">
         <Group>
           <ChangeDisplayedTradesButton
             userAddress={userAddress}
-            dcaKeys={dcaKeys}
-            valueAverageKeys={valueAverageKeys}
+            recurringKeys={recurringKeys}
             triggerKeys={triggerKeys}
           />
           <Title order={3}>No trades selected</Title>
@@ -1179,13 +1091,11 @@ export default function Trades() {
         <Group justify="space-between">
           <ChangeDisplayedTradesButton
             userAddress={userAddress}
-            dcaKeys={dcaKeys}
-            valueAverageKeys={valueAverageKeys}
+            recurringKeys={recurringKeys}
             triggerKeys={triggerKeys}
           />
           <TradeCountsTitle
-            dcaKeysCount={dcaKeys.length}
-            valueAverageKeysCount={valueAverageKeys.length}
+            recurringKeysCount={recurringKeys.length}
             triggerKeysCount={triggerKeys.length}
             tradesCount={trades.length}
           />
@@ -1224,7 +1134,7 @@ export default function Trades() {
         <Table stickyHeader horizontalSpacing="lg">
           <Table.Thead>
             <Table.Tr>
-              <Table.Th>Position</Table.Th>
+              <Table.Th>Order</Table.Th>
               <Table.Th>Date</Table.Th>
               <Table.Th>Action</Table.Th>
               <Table.Th>Amount</Table.Th>
