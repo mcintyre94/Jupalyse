@@ -21,11 +21,11 @@ import {
 import {
   DCAFetchedAccount,
   DCAStatus,
-  TriggerFetchedAccount,
   MintData,
   ValueAverageFetchedAccount,
   ValueAverageStatus,
   RecurringOrderFetchedAccount,
+  TriggerOrderFetchedAccount,
 } from "../types";
 import { useListState } from "@mantine/hooks";
 import {
@@ -43,6 +43,7 @@ import {
   getOpenTriggers,
   getRecurringOrdersHistory,
   getRecurringOrdersActive,
+  getTriggerOrdersHistory,
 } from "../jupiter-api";
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
@@ -72,8 +73,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   // Recurring covers both what was previously DCA (time) and value average (price)
   const recurringOrdersHistory = await getRecurringOrdersHistory(address);
   const recurringOrdersActive = await getRecurringOrdersActive(address);
-
-  // triggerOrdersHistory
+  const triggerOrdersHistory = await getTriggerOrdersHistory(address);
 
   // triggerOrdersActive
 
@@ -93,6 +93,10 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       ]),
       ...closedTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
       ...openTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
+      ...triggerOrdersHistory.flatMap((order) => [
+        order.inputMint,
+        order.outputMint,
+      ]),
     ]),
   );
 
@@ -115,6 +119,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     recurringOrdersActive,
     valueAverages: [...closedValueAverages, ...openValueAverages],
     triggers: [...closedTriggers, ...openTriggers],
+    triggerOrdersHistory,
     selectedDcaKeys: dcaKeys,
     selectedValueAverageKeys: valueAverageKeys,
     selectedTriggerKeys: triggerKeys,
@@ -125,14 +130,17 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 type AccountWithType =
   | { account: DCAFetchedAccount; type: "dca" }
   | { account: ValueAverageFetchedAccount; type: "va" }
-  | { account: RecurringOrderWithStatus; type: "recurring" }
-  | { account: TriggerFetchedAccount; type: "trigger" };
+  | { account: RecurringOrderWithOrderStatus; type: "recurring" }
+  | { account: TriggerOrderWithOrderStatus; type: "trigger" };
 
-type AccountsWithType =
-  | { accounts: DCAFetchedAccount[]; type: "dca" }
-  | { accounts: ValueAverageFetchedAccount[]; type: "va" }
-  | { accounts: RecurringOrderWithStatus[]; type: "recurring" }
-  | { accounts: TriggerFetchedAccount[]; type: "trigger" };
+type AccountsWithType = {
+  [K in AccountWithType["type"]]: Extract<
+    AccountWithType,
+    { type: K }
+  > extends { account: infer A }
+    ? { accounts: A[]; type: K }
+    : never;
+}[AccountWithType["type"]];
 
 function getKey(accountWithType: AccountWithType) {
   const { account, type } = accountWithType;
@@ -202,12 +210,12 @@ function getIsOpen(
     return account.status === DCAStatus.OPEN;
   }
   if (type === "recurring") {
-    return account.status === "active";
+    return account.orderStatus === "active";
   }
   return account.status === ValueAverageStatus.OPEN;
 }
 
-function getTriggerStatusText(trigger: TriggerFetchedAccount) {
+function getTriggerStatusText(trigger: TriggerOrderFetchedAccount) {
   const { status, trades } = trigger;
 
   if (status === "Completed") {
@@ -230,7 +238,16 @@ function getTriggerStatusText(trigger: TriggerFetchedAccount) {
     return `Cancelled after ${trades.length} trades`;
   }
 
-  // TODO: other status values
+  if (status === "Open") {
+    if (trades.length === 0) {
+      return "Open with no trades";
+    }
+    if (trades.length === 1) {
+      return "Open with 1 trade so far";
+    }
+    return `Open with ${trades.length} trades so far`;
+  }
+
   return undefined;
 }
 
@@ -526,10 +543,11 @@ function MultipleItemCheckboxGroup({
 
 type CheckboxGroupProps = BaseCheckboxGroupProps & {
   accountsWithType:
+    | AccountsWithType
     | { accounts: DCAFetchedAccount[]; type: "dca" }
     | { accounts: ValueAverageFetchedAccount[]; type: "va" }
-    | { accounts: RecurringOrderWithStatus[]; type: "recurring" }
-    | { accounts: TriggerFetchedAccount[]; type: "trigger" };
+    | { accounts: RecurringOrderWithOrderStatus[]; type: "recurring" }
+    | { accounts: TriggerOrderWithOrderStatus[]; type: "trigger" };
 };
 
 function CheckboxGroup({
@@ -579,8 +597,12 @@ function ChangeAddressButton() {
   );
 }
 
-type RecurringOrderWithStatus = RecurringOrderFetchedAccount & {
-  status: "history" | "active";
+type RecurringOrderWithOrderStatus = RecurringOrderFetchedAccount & {
+  orderStatus: "history" | "active";
+};
+
+type TriggerOrderWithOrderStatus = TriggerOrderFetchedAccount & {
+  orderStatus: "history" | "active";
 };
 
 export default function Strategies() {
@@ -589,9 +611,9 @@ export default function Strategies() {
   assertIsAddress(address);
 
   const {
-    triggers,
     recurringOrdersHistory,
     recurringOrdersActive,
+    triggerOrdersHistory,
     selectedDcaKeys,
     selectedValueAverageKeys,
     selectedTriggerKeys,
@@ -601,15 +623,21 @@ export default function Strategies() {
   const navigation = useNavigation();
   const isLoading = navigation.state === "loading";
 
-  // will add recurringOrdersActive here too
-  const recurringOrders: RecurringOrderWithStatus[] = [
+  const recurringOrders: RecurringOrderWithOrderStatus[] = [
     ...recurringOrdersHistory.map((order) => ({
       ...order,
-      status: "history" as const,
+      orderStatus: "history" as const,
     })),
     ...recurringOrdersActive.map((order) => ({
       ...order,
-      status: "active" as const,
+      orderStatus: "active" as const,
+    })),
+  ];
+
+  const triggerOrders: TriggerOrderWithOrderStatus[] = [
+    ...triggerOrdersHistory.map((order) => ({
+      ...order,
+      orderStatus: "history" as const,
     })),
   ];
 
@@ -628,7 +656,7 @@ export default function Strategies() {
       acc[key].push(order);
       return acc;
     },
-    {} as Record<string, RecurringOrderWithStatus[]>,
+    {} as Record<string, RecurringOrderWithOrderStatus[]>,
   );
 
   // Group recurring price orders by input + output mint
@@ -639,18 +667,18 @@ export default function Strategies() {
       acc[key].push(order);
       return acc;
     },
-    {} as Record<string, RecurringOrderWithStatus[]>,
+    {} as Record<string, RecurringOrderWithOrderStatus[]>,
   );
 
   // Group triggers by input + output mint
-  const groupedTriggers = triggers.reduce(
+  const groupedTriggers = triggerOrders.reduce(
     (acc, trigger) => {
       const key = `${trigger.inputMint}-${trigger.outputMint}`;
       acc[key] ??= [];
       acc[key].push(trigger);
       return acc;
     },
-    {} as Record<string, TriggerFetchedAccount[]>,
+    {} as Record<string, TriggerOrderWithOrderStatus[]>,
   );
 
   const allSelectedKeys = new Set([

@@ -10,6 +10,8 @@ import {
   ValueAverageFetchedAccount,
   RecurringOrderFetchedAccount,
   RecurringOrdersResponse,
+  TriggerOrderFetchedAccount,
+  TriggerOrdersResponse,
 } from "./types";
 import { queryClient } from "./query-client";
 
@@ -97,6 +99,38 @@ export async function getRecurringOrdersActive(
   return queryClient.fetchQuery({
     queryKey: ["recurringOrdersActive", address],
     queryFn: () => getRecurringOrdersActiveImpl(address),
+  });
+}
+
+async function getTriggerOrdersHistoryImpl(
+  address: Address,
+): Promise<TriggerOrderFetchedAccount[]> {
+  // Note that this API is paginated
+  let page = 1;
+  let totalPages = 1;
+  const orders: TriggerOrderFetchedAccount[] = [];
+
+  while (page <= totalPages) {
+    const response = await fetch(
+      `https://lite-api.jup.ag/trigger/v1/getTriggerOrders?user=${address}&orderStatus=history&page=${page}`,
+    );
+    if (response.status >= 400) {
+      throw new Error("Error fetching past recurring orders from Jupiter");
+    }
+    const data = (await response.json()) as TriggerOrdersResponse;
+    orders.push(...data.orders.filter((order) => order.trades.length > 0));
+    totalPages = data.totalPages;
+    page += 1;
+  }
+  return orders;
+}
+
+export async function getTriggerOrdersHistory(
+  address: Address,
+): Promise<TriggerOrderFetchedAccount[]> {
+  return queryClient.fetchQuery({
+    queryKey: ["triggerOrdersHistory", address],
+    queryFn: () => getTriggerOrdersHistoryImpl(address),
   });
 }
 

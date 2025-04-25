@@ -58,12 +58,6 @@ export type FetchDCAFillsResponse = {
   };
 };
 
-export type RecurringOrdersResponse = {
-  all: RecurringOrderFetchedAccount[];
-  totalPages: number;
-  page: number;
-};
-
 // TODO: this can replace the LimitOrderTrade, same for all types now
 type JupiterTrade = {
   confirmedAt: StringifiedDate;
@@ -84,13 +78,40 @@ export type RecurringOrderFetchedAccount = {
   orderKey: Address;
   inputMint: Address;
   outputMint: Address;
+  /** Note: already adjusted for decimals */
   inDeposited: StringifiedNumber;
+  /** Note: already adjusted for decimals */
   outReceived: StringifiedNumber;
   cycleFrequency: number;
+  /** Note: already adjusted for decimals */
   inAmountPerCycle: StringifiedNumber;
   openTx: Signature;
   createdAt: StringifiedDate;
   trades: JupiterTrade[];
+};
+
+export type RecurringOrdersResponse = {
+  all: RecurringOrderFetchedAccount[];
+  totalPages: number;
+  page: number;
+};
+
+export type TriggerOrderFetchedAccount = {
+  orderKey: Address;
+  inputMint: Address;
+  outputMint: Address;
+  /** Note: already adjusted for decimals */
+  makingAmount: StringifiedNumber;
+  createdAt: StringifiedDate;
+  status: "Completed" | "Cancelled" | "Open";
+  openTx: Signature;
+  trades: JupiterTrade[];
+};
+
+export type TriggerOrdersResponse = {
+  orders: TriggerOrderFetchedAccount[];
+  totalPages: number;
+  page: number;
 };
 
 export enum ValueAverageStatus {
