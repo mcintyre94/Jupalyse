@@ -35,12 +35,6 @@ import {
 import { getMintData } from "../mint-data";
 import { IconArrowLeft } from "@tabler/icons-react";
 import {
-  getClosedDCAs,
-  getOpenDCAs,
-  getClosedValueAverages,
-  getOpenValueAverages,
-  getClosedTriggers,
-  getOpenTriggers,
   getRecurringOrdersHistory,
   getRecurringOrdersActive,
   getTriggerOrdersHistory,
@@ -54,22 +48,6 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     throw new Error("Invalid address");
   }
 
-  const [
-    closedDCAs,
-    openDCAs,
-    closedValueAverages,
-    openValueAverages,
-    closedTriggers,
-    openTriggers,
-  ] = await Promise.all([
-    getClosedDCAs(address),
-    getOpenDCAs(address),
-    getClosedValueAverages(address),
-    getOpenValueAverages(address),
-    getClosedTriggers(address),
-    getOpenTriggers(address),
-  ]);
-
   // Fetch sequentially from Jupiter API to avoid rate limiting
   // Recurring covers both what was previously DCA (time) and value average (price)
   const recurringOrdersHistory = await getRecurringOrdersHistory(address);
@@ -79,10 +57,6 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   const uniqueMintAddresses: Address[] = Array.from(
     new Set<Address>([
-      ...closedDCAs.flatMap((dca) => [dca.inputMint, dca.outputMint]),
-      ...openDCAs.flatMap((dca) => [dca.inputMint, dca.outputMint]),
-      ...closedValueAverages.flatMap((va) => [va.inputMint, va.outputMint]),
-      ...openValueAverages.flatMap((va) => [va.inputMint, va.outputMint]),
       ...recurringOrdersHistory.flatMap((order) => [
         order.inputMint,
         order.outputMint,
@@ -91,8 +65,6 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
         order.inputMint,
         order.outputMint,
       ]),
-      ...closedTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
-      ...openTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
       ...triggerOrdersHistory.flatMap((order) => [
         order.inputMint,
         order.outputMint,
@@ -118,11 +90,8 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   );
 
   return {
-    dcas: [...closedDCAs, ...openDCAs],
     recurringOrdersHistory,
     recurringOrdersActive,
-    valueAverages: [...closedValueAverages, ...openValueAverages],
-    triggers: [...closedTriggers, ...openTriggers],
     triggerOrdersHistory,
     triggerOrdersActive,
     selectedDcaKeys: dcaKeys,
@@ -610,6 +579,7 @@ type TriggerOrderWithOrderStatus = TriggerOrderFetchedAccount & {
   orderStatus: "history" | "active";
 };
 
+// TODO: should probably rename this to Orders
 export default function Strategies() {
   const params = useParams();
   const address = params.address as string;
