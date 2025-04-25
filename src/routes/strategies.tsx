@@ -71,15 +71,8 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   const mints = await getMintData(uniqueMintAddresses);
 
-  // TODO: rethink these query params? maybe just one param for all? since they're unique
-  const dcaKeys = new Set(
-    new URL(request.url).searchParams.getAll("dca") as Address[],
-  );
-  const valueAverageKeys = new Set(
-    new URL(request.url).searchParams.getAll("va") as Address[],
-  );
-  const triggerKeys = new Set(
-    new URL(request.url).searchParams.getAll("trigger") as Address[],
+  const selectedOrderKeys = new Set(
+    new URL(request.url).searchParams.getAll("o") as Address[],
   );
 
   return {
@@ -87,9 +80,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     recurringOrdersActive,
     triggerOrdersHistory,
     triggerOrdersActive,
-    selectedDcaKeys: dcaKeys,
-    selectedValueAverageKeys: valueAverageKeys,
-    selectedTriggerKeys: triggerKeys,
+    selectedOrderKeys,
     mints,
   };
 }
@@ -511,9 +502,7 @@ export default function Strategies() {
     recurringOrdersActive,
     triggerOrdersHistory,
     triggerOrdersActive,
-    selectedDcaKeys,
-    selectedValueAverageKeys,
-    selectedTriggerKeys,
+    selectedOrderKeys,
     mints,
   } = useLoaderData() as Awaited<ReturnType<typeof loader>>;
 
@@ -582,12 +571,6 @@ export default function Strategies() {
     {} as Record<string, TriggerOrderWithOrderStatus[]>,
   );
 
-  const allSelectedKeys = new Set([
-    ...selectedDcaKeys,
-    ...selectedValueAverageKeys,
-    ...selectedTriggerKeys,
-  ]);
-
   return (
     <Container size="sm">
       <Stack gap="xl" align="center">
@@ -616,8 +599,7 @@ export default function Strategies() {
                         accounts: orders,
                         type: "recurring",
                       }}
-                      // Note: we pass allSelectedKeys so that if any trades in any strategies are pre-selected, we only select them
-                      selectedKeys={allSelectedKeys}
+                      selectedKeys={selectedOrderKeys}
                       mints={mints}
                     />
                   ),
@@ -636,7 +618,7 @@ export default function Strategies() {
                         accounts: orders,
                         type: "recurring",
                       }}
-                      selectedKeys={allSelectedKeys}
+                      selectedKeys={selectedOrderKeys}
                       mints={mints}
                     />
                   ),
@@ -654,7 +636,7 @@ export default function Strategies() {
                       accounts: triggers,
                       type: "trigger",
                     }}
-                    selectedKeys={allSelectedKeys}
+                    selectedKeys={selectedOrderKeys}
                     mints={mints}
                   />
                 ))}
