@@ -44,6 +44,7 @@ import {
   getRecurringOrdersHistory,
   getRecurringOrdersActive,
   getTriggerOrdersHistory,
+  getTriggerOrdersActive,
 } from "../jupiter-api";
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
@@ -74,8 +75,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   const recurringOrdersHistory = await getRecurringOrdersHistory(address);
   const recurringOrdersActive = await getRecurringOrdersActive(address);
   const triggerOrdersHistory = await getTriggerOrdersHistory(address);
-
-  // triggerOrdersActive
+  const triggerOrdersActive = await getTriggerOrdersActive(address);
 
   const uniqueMintAddresses: Address[] = Array.from(
     new Set<Address>([
@@ -94,6 +94,10 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
       ...closedTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
       ...openTriggers.flatMap((order) => [order.inputMint, order.outputMint]),
       ...triggerOrdersHistory.flatMap((order) => [
+        order.inputMint,
+        order.outputMint,
+      ]),
+      ...triggerOrdersActive.flatMap((order) => [
         order.inputMint,
         order.outputMint,
       ]),
@@ -120,6 +124,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     valueAverages: [...closedValueAverages, ...openValueAverages],
     triggers: [...closedTriggers, ...openTriggers],
     triggerOrdersHistory,
+    triggerOrdersActive,
     selectedDcaKeys: dcaKeys,
     selectedValueAverageKeys: valueAverageKeys,
     selectedTriggerKeys: triggerKeys,
@@ -614,6 +619,7 @@ export default function Strategies() {
     recurringOrdersHistory,
     recurringOrdersActive,
     triggerOrdersHistory,
+    triggerOrdersActive,
     selectedDcaKeys,
     selectedValueAverageKeys,
     selectedTriggerKeys,
@@ -638,6 +644,10 @@ export default function Strategies() {
     ...triggerOrdersHistory.map((order) => ({
       ...order,
       orderStatus: "history" as const,
+    })),
+    ...triggerOrdersActive.map((order) => ({
+      ...order,
+      orderStatus: "active" as const,
     })),
   ];
 

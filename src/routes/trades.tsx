@@ -96,6 +96,7 @@ async function getDCAFills(dcaKeys: Address[]): Promise<Trade[]> {
       inputMint: fill.inputMint,
       outputMint: fill.outputMint,
       inputAmount: {
+        // @ts-expect-error this will be fixed when we change to lite-api everywhere
         amount: fill.inAmount,
         adjustedForDecimals: false,
       },

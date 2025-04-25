@@ -115,7 +115,7 @@ async function getTriggerOrdersHistoryImpl(
       `https://lite-api.jup.ag/trigger/v1/getTriggerOrders?user=${address}&orderStatus=history&page=${page}`,
     );
     if (response.status >= 400) {
-      throw new Error("Error fetching past recurring orders from Jupiter");
+      throw new Error("Error fetching past trigger orders from Jupiter");
     }
     const data = (await response.json()) as TriggerOrdersResponse;
     orders.push(...data.orders.filter((order) => order.trades.length > 0));
@@ -131,6 +131,38 @@ export async function getTriggerOrdersHistory(
   return queryClient.fetchQuery({
     queryKey: ["triggerOrdersHistory", address],
     queryFn: () => getTriggerOrdersHistoryImpl(address),
+  });
+}
+
+async function getTriggerOrdersActiveImpl(
+  address: Address,
+): Promise<TriggerOrderFetchedAccount[]> {
+  // Note that this API is paginated
+  let page = 1;
+  let totalPages = 1;
+  const orders: TriggerOrderFetchedAccount[] = [];
+
+  while (page <= totalPages) {
+    const response = await fetch(
+      `https://lite-api.jup.ag/trigger/v1/getTriggerOrders?user=${address}&orderStatus=active&page=${page}`,
+    );
+    if (response.status >= 400) {
+      throw new Error("Error fetching active trigger orders from Jupiter");
+    }
+    const data = (await response.json()) as TriggerOrdersResponse;
+    orders.push(...data.orders.filter((order) => order.trades.length > 0));
+    totalPages = data.totalPages;
+    page += 1;
+  }
+  return orders;
+}
+
+export async function getTriggerOrdersActive(
+  address: Address,
+): Promise<TriggerOrderFetchedAccount[]> {
+  return queryClient.fetchQuery({
+    queryKey: ["triggerOrdersActive", address],
+    queryFn: () => getTriggerOrdersActiveImpl(address),
   });
 }
 
