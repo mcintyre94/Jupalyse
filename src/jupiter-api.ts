@@ -17,7 +17,7 @@ async function getRecurringOrdersHistoryImpl(
 
   while (page <= totalPages) {
     const response = await fetch(
-      `https://lite-api.jup.ag/recurring/v1/getRecurringOrders?user=${address}&orderStatus=history&recurringType=all&includeFailedTx=false&page=${page}`,
+      `/api/recurring-orders?user=${address}&orderStatus=history&recurringType=all&includeFailedTx=false&page=${page}`,
     );
     if (response.status >= 400) {
       throw new Error("Error fetching past recurring orders from Jupiter");
@@ -49,7 +49,7 @@ async function getRecurringOrdersActiveImpl(
 
   while (page <= totalPages) {
     const response = await fetch(
-      `https://lite-api.jup.ag/recurring/v1/getRecurringOrders?user=${address}&orderStatus=active&recurringType=all&includeFailedTx=false&page=${page}`,
+      `/api/recurring-orders?user=${address}&orderStatus=active&recurringType=all&includeFailedTx=false&page=${page}`,
     );
     if (response.status >= 400) {
       throw new Error("Error fetching active recurring orders from Jupiter");
@@ -81,7 +81,7 @@ async function getTriggerOrdersHistoryImpl(
 
   while (page <= totalPages) {
     const response = await fetch(
-      `https://lite-api.jup.ag/trigger/v1/getTriggerOrders?user=${address}&orderStatus=history&page=${page}`,
+      `/api/trigger-orders?user=${address}&orderStatus=history&page=${page}`,
     );
     if (response.status >= 400) {
       throw new Error("Error fetching past trigger orders from Jupiter");
@@ -113,7 +113,7 @@ async function getTriggerOrdersActiveImpl(
 
   while (page <= totalPages) {
     const response = await fetch(
-      `https://lite-api.jup.ag/trigger/v1/getTriggerOrders?user=${address}&orderStatus=active&page=${page}`,
+      `/api/trigger-orders?user=${address}&orderStatus=active&page=${page}`,
     );
     if (response.status >= 400) {
       throw new Error("Error fetching active trigger orders from Jupiter");
