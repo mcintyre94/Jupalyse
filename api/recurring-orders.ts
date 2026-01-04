@@ -1,13 +1,10 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse,
-) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   const apiKey = process.env.JUPITER_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ error: 'API key not configured' });
+    return res.status(500).json({ error: "API key not configured" });
   }
 
   // Forward all query params to Jupiter API
@@ -26,14 +23,14 @@ export default async function handler(
       `https://api.jup.ag/recurring/v1/getRecurringOrders?${params}`,
       {
         headers: {
-          'x-api-key': apiKey,
+          "x-api-key": apiKey,
         },
-      }
+      },
     );
 
     if (!response.ok) {
       return res.status(response.status).json({
-        error: 'Error fetching recurring orders from Jupiter'
+        error: "Error fetching recurring orders from Jupiter",
       });
     }
 
@@ -41,8 +38,8 @@ export default async function handler(
     return res.status(200).json(data);
   } catch (error) {
     return res.status(500).json({
-      error: 'Failed to fetch recurring orders',
-      message: error instanceof Error ? error.message : 'Unknown error'
+      error: "Failed to fetch recurring orders",
+      message: error instanceof Error ? error.message : "Unknown error",
     });
   }
 }
