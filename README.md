@@ -19,20 +19,25 @@ Visit https://jupalyse.vercel.app to get started.
 
 ## Running locally
 
+- You need a [Jupiter API key](https://portal.jup.ag/api-keys)
+- Copy `.env.copy` to `.env`, and set `JUPITER_API_KEY`
+
 ```sh
-npm install
-npm run dev
+pnpm install
+pnpm dev:api
+pnpm dev
 ```
 
 ## Shout outs
 
-- [Jupiter](https://jup.ag) for the DCA API (and DCA!)
+- [Jupiter](https://jup.ag) for all the APIs!
 - [Solflare](https://github.com/solflare-wallet/utl-api) for their awesome token API!
 
 ## Tech stuff
 
 - Built with [React](https://react.dev) + [React Router](https://reactrouter.com)
 - UI components from [Mantine](https://mantine.dev)
+- Uses Vercel for the API routes
 
 ## License
 
