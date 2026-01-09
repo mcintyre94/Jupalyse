@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 tsconfig.tsbuildinfo
+.env
+.vercel
+.env*.local

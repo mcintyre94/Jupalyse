@@ -1,4 +1,6 @@
 {
+  "buildCommand": "vite build",
+  "installCommand": "pnpm install",
   "rewrites": [
     {
       "source": "/(.*)",
