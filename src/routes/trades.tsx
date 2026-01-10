@@ -76,6 +76,7 @@ import {
   getTokenPricesToFetch,
   roundTimestampToMinuteBoundary,
 } from "../token-prices";
+import { VerifiedIcon } from "../components/VerifiedIcon";
 
 async function getSelectedRecurringOrders(
   userAddress: Address,
@@ -466,9 +467,19 @@ function TokenAmountCell({
             <Text component="span" onClick={onNumberClick}>
               {formattedAmount}
             </Text>{" "}
-            <DottedAnchorLink href={explorerLink}>
-              {tokenMintData.symbol}
-            </DottedAnchorLink>
+            <span
+              style={{
+                display: "inline-flex",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 0,
+              }}
+            >
+              <DottedAnchorLink href={explorerLink}>
+                {tokenMintData.symbol}
+              </DottedAnchorLink>
+              {tokenMintData.isVerified && <VerifiedIcon />}
+            </span>
           </Text>
           {usdAmount ? (
             <UsdAmount amount={usdAmount}>
@@ -586,10 +597,12 @@ function RateCell({
     ],
   );
 
-  const text = useMemo(() => {
-    return rateType === RateType.INPUT_PER_OUTPUT
-      ? `${rateInputOverOutput.getPrettyValue()} ${inputMintData.symbol} per ${outputMintData.symbol}`
-      : `${rateOutputOverInput.getPrettyValue()} ${outputMintData.symbol} per ${inputMintData.symbol}`;
+  const content = useMemo(() => {
+    if (rateType === RateType.INPUT_PER_OUTPUT) {
+      return `${rateInputOverOutput.getPrettyValue()} ${inputMintData.symbol} per ${outputMintData.symbol}`;
+    } else {
+      return `${rateOutputOverInput.getPrettyValue()} ${outputMintData.symbol} per ${inputMintData.symbol}`;
+    }
   }, [
     rateInputOverOutput,
     rateOutputOverInput,
@@ -598,7 +611,7 @@ function RateCell({
     rateType,
   ]);
 
-  return <Text onClick={onNumberClick}>{text}</Text>;
+  return <Text onClick={onNumberClick}>{content}</Text>;
 }
 
 function TransactionLinkCell({ txId }: { txId: string }) {
