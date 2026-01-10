@@ -33,6 +33,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const data = await response.json();
+
+    // Set cache headers based on order status
+    // Historical orders never change, so cache them indefinitely
+    // Active orders change frequently, so cache for 5 minutes
+    if (orderStatus === "history") {
+      res.setHeader("Cache-Control", "public, immutable, max-age=31536000");
+    } else if (orderStatus === "active") {
+      res.setHeader("Cache-Control", "public, max-age=300");
+    }
+
     return res.status(200).json(data);
   } catch (error) {
     return res.status(500).json({

@@ -33,6 +33,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const data = await response.json();
+
+    // Cache token metadata for 24 hours (metadata rarely changes)
+    res.setHeader("Cache-Control", "public, max-age=86400");
+
     return res.status(200).json(data);
   } catch (error) {
     return res.status(500).json({
