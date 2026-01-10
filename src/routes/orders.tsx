@@ -33,6 +33,7 @@ import {
   getTriggerOrdersHistory,
   getTriggerOrdersActive,
 } from "../jupiter-api";
+import { VerifiedIcon } from "../components/VerifiedIcon";
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const address = params.address as string;
@@ -101,7 +102,7 @@ type AccountsWithType = {
 function getInputAmountWithSymbol(
   accountWithType: AccountWithType,
   inputMintData: MintData | undefined,
-): String {
+): React.ReactNode {
   const { account, type } = accountWithType;
 
   if (type === "recurring") {
@@ -110,7 +111,12 @@ function getInputAmountWithSymbol(
       account.inDeposited,
     );
     if (inputMintData) {
-      return `${inputAmountDisplay} ${inputMintData.symbol}`;
+      return (
+        <span style={{ display: "inline-flex", alignItems: "center" }}>
+          {inputAmountDisplay} {inputMintData.symbol}
+          {inputMintData.isVerified && <VerifiedIcon />}
+        </span>
+      );
     }
     return `${inputAmountDisplay} (Unknown (${account.inputMint}))`;
   }
@@ -118,7 +124,15 @@ function getInputAmountWithSymbol(
   if (type === "trigger") {
     if (inputMintData) {
       // makingAmount is already adjusted for decimals, but is not optimal for display to users
-      return `${numberDisplayAlreadyAdjustedForDecimals(account.makingAmount)} ${inputMintData.symbol}`;
+      const amountDisplay = numberDisplayAlreadyAdjustedForDecimals(
+        account.makingAmount,
+      );
+      return (
+        <span style={{ display: "inline-flex", alignItems: "center" }}>
+          {amountDisplay} {inputMintData.symbol}
+          {inputMintData.isVerified && <VerifiedIcon />}
+        </span>
+      );
     }
     return `${account.makingAmount} (Unknown (${account.inputMint}))`;
   }
@@ -129,13 +143,18 @@ function getInputAmountWithSymbol(
 function getOutputDisplay(
   account: AccountWithType["account"],
   mints: MintData[],
-): string {
+): React.ReactNode {
   const outputMintData = mints.find(
     (mint) => mint.address === account.outputMint,
   );
 
   if (outputMintData) {
-    return outputMintData.symbol;
+    return (
+      <span style={{ display: "inline-flex", alignItems: "center" }}>
+        {outputMintData.symbol}
+        {outputMintData.isVerified && <VerifiedIcon />}
+      </span>
+    );
   }
   return `Unknown (${account.outputMint})`;
 }
@@ -279,9 +298,32 @@ function getGroupLabel(
   account: AccountsWithType["accounts"][0],
   inputMintData: MintData | undefined,
   outputMintData: MintData | undefined,
-) {
+): React.ReactNode {
   const { inputMint, outputMint } = account;
-  return `${inputMintData?.symbol ?? `Unknown (${inputMint})`} -> ${outputMintData?.symbol ?? `Unknown (${outputMint})`}`;
+
+  const inputDisplay = inputMintData ? (
+    <span style={{ display: "inline-flex", alignItems: "center" }}>
+      {inputMintData.symbol}
+      {inputMintData.isVerified && <VerifiedIcon />}
+    </span>
+  ) : (
+    `Unknown (${inputMint})`
+  );
+
+  const outputDisplay = outputMintData ? (
+    <span style={{ display: "inline-flex", alignItems: "center" }}>
+      {outputMintData.symbol}
+      {outputMintData.isVerified && <VerifiedIcon />}
+    </span>
+  ) : (
+    `Unknown (${outputMint})`
+  );
+
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      {inputDisplay} {"->"} {outputDisplay}
+    </span>
+  );
 }
 
 function getFirstAccountWithType(
