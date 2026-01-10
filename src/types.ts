@@ -3,16 +3,24 @@ import { Address, Signature } from "@solana/web3.js";
 type StringifiedDate = string & { __brand: "StringifiedDate" };
 export type StringifiedNumber = string & { __brand: "StringifiedNumber" };
 
+export type JupiterTokenResponse = {
+  id: Address;
+  name: string;
+  symbol: string;
+  icon?: string;
+  decimals: number;
+  tags?: string[];
+  isVerified?: boolean;
+  usdPrice?: number;
+};
+
 export type MintData = {
   address: Address;
   name: string;
   symbol: string;
   decimals: number;
   logoURI: string;
-};
-
-export type FetchMintsResponse = {
-  content: MintData[];
+  isVerified?: boolean;
 };
 
 type JupiterTrade = {
